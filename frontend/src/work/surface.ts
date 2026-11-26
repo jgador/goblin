@@ -100,6 +100,18 @@ export function renderProgress(item: View) {
     return `<div class="progress-list">${rows.map((row) => `<details class="progress-row ${row.done ? "is-complete" : ""}" id="progress-${row.id}"><summary><span class="milestone-icon ${row.done ? "complete" : ""}">${icon(row.done ? "check" : "clock")}</span><span class="row-title">${e(row.title)}</span>${icon("chevron", "disclosure-icon")}<span class="row-meta ${row.done ? "sr-only" : ""}">${e(row.state)}</span></summary><div class="inspection"><p>${e(row.evidence)}</p>${row.id === "execution" && attempt ? `<button class="text-button" data-action="inspect-output" data-id="execution-${e(attempt.id)}">Inspect execution ${icon("arrow")}</button>` : ""}</div></details>`).join("")}</div>`;
 }
 
+export function reviewableResult(work?: Work) {
+    if (
+        work?.status !== WorkStatus.NeedsAttention ||
+        work.attention?.reason !== AttentionReason.ResultReview
+    )
+        return;
+    const attempt = work.attempts.at(-1);
+    const result = work.results.at(-1);
+    if (attempt && !attempt.cleanupPending && result?.attemptId === attempt.id)
+        return result;
+}
+
 export function renderDecisions(w: Work) {
     return (
         w.decisions
@@ -246,7 +258,6 @@ const humanEvents = new Set<WorkEventKind>([
     WorkEventKind.ContextAdded,
 ]);
 const conversationEvents = new Set<WorkEventKind>([
-    WorkEventKind.Created,
     WorkEventKind.ContextAdded,
     WorkEventKind.InputProvided,
     WorkEventKind.ChangesRequested,
@@ -286,15 +297,57 @@ export function renderActivity(w?: Work) {
     );
 }
 
-export function renderConversation(w: Work) {
-    return (
-        w.history
-            .filter((h) => conversationEvents.has(h.kind) && h.text)
-            .map(
-                (h) =>
-                    `<article class="context-message"><p class="message-name">${[WorkEventKind.ResultProposed, WorkEventKind.InputRequested].some((value) => value === h.kind) ? "Goblin" : "You"}<time>${e(timestamp(h.occurredAt))}</time></p><p class="preserve-lines">${e(h.text)}</p></article>`,
-            )
-            .join("") ||
-        '<p class="section-empty">No conversation recorded yet.</p>'
+export function renderConversation(w: Work, agent: string, approve: string) {
+    const review = reviewableResult(w);
+    const results = new Map(
+        w.results.map((result) => [result.attemptId, result]),
     );
+    const messages: string[] = [];
+    const message = (
+        text: string,
+        fromAgent: boolean,
+        at?: string,
+        note = "",
+        action = "",
+    ) =>
+        `<article class="context-message ${fromAgent ? "agent-message" : "user-message"}"><p class="message-name">${fromAgent ? '<img src="/assets/branding/icon.svg" alt="">' + e(agent) : "You"}${note ? `<span>${e(note)}</span>` : ""}${at ? `<time datetime="${e(at)}" title="${e(timestamp(at))}">${e(relativeTime(at))}</time>` : ""}</p><p class="message-body preserve-lines">${e(text)}</p>${action ? `<div class="result-action">${action}</div>` : ""}</article>`;
+    for (const event of w.history) {
+        if (!conversationEvents.has(event.kind)) continue;
+        if (event.kind === WorkEventKind.ResultProposed && event.attemptId) {
+            const result = results.get(event.attemptId);
+            if (result) {
+                results.delete(event.attemptId);
+                messages.push(
+                    message(
+                        result.text,
+                        true,
+                        event.occurredAt,
+                        "",
+                        result === review ? approve : "",
+                    ),
+                );
+                continue;
+            }
+        }
+        if (!event.text) continue;
+        const fromAgent =
+            event.kind === WorkEventKind.ResultProposed ||
+            event.kind === WorkEventKind.InputRequested;
+        const note =
+            event.kind === WorkEventKind.ChangesRequested
+                ? "Requested changes"
+                : "";
+        messages.push(message(event.text, fromAgent, event.occurredAt, note));
+    }
+    for (const result of results.values())
+        messages.push(
+            message(
+                result.text,
+                true,
+                result.proposedAt,
+                "",
+                result === review ? approve : "",
+            ),
+        );
+    return messages.join("");
 }

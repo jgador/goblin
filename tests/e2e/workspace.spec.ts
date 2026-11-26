@@ -7,6 +7,8 @@ type WorkFixture = {
     status: string;
     attention?: { reason: string };
 };
+const welcomeResult =
+    "The welcome page is ready for review. The introduction is shorter, the primary action is clear, and the mobile layout keeps the important content in view.";
 
 async function workspace(
     page: Page,
@@ -60,12 +62,13 @@ async function workspace(
                     {
                         sequence: "1",
                         kind: "ResultProposed",
-                        text: "The welcome page is ready for review. The introduction is shorter, the primary action is clear, and the mobile layout keeps the important content in view.",
+                        attemptId: "1",
+                        text: welcomeResult,
                         occurredAt: "2026-09-21T00:02:00Z",
                     },
                 ],
                 decisions: [],
-                results: [{ attemptId: "1", text: "Ready for review." }],
+                results: [{ attemptId: "1", text: welcomeResult }],
                 artifacts: [],
             },
         }));
@@ -150,13 +153,20 @@ test("Changes opens an in-page diff with all files and individual file views", a
         "diff --git a/welcome.txt b/welcome.txt",
         "--- a/welcome.txt",
         "+++ b/welcome.txt",
-        "@@ -1 +1 @@",
+        "@@ -1,81 +1,81 @@",
         "-Hello",
         "+<welcome>",
+        ...Array.from(
+            { length: 80 },
+            (_, index) => ` Context line ${index + 1}`,
+        ),
         String.raw`diff --git "a/docs/caf\303\251.txt" "b/docs/caf\303\251.txt"`,
-        "similarity index 100%",
+        "similarity index 80%",
         "rename from docs/cafe.txt",
         String.raw`rename to "docs/caf\303\251.txt"`,
+        "@@ -1 +1 @@",
+        "-Cafe",
+        "+Café",
         "diff --git a/assets/theme.png b/assets/theme.png",
         "GIT binary patch",
         "literal 4",
@@ -179,15 +189,20 @@ test("Changes opens an in-page diff with all files and individual file views", a
     );
     await page.goto("/work?item=1");
     const trigger = page.getByRole("button", { name: "Changes", exact: true });
+    const closedPosition = await trigger.boundingBox();
     await trigger.click();
     const review = page.getByRole("region", { name: "Changes", exact: true });
     await expect(
         review.getByRole("heading", { name: "Changes" }),
     ).toBeFocused();
     await expect(
-        page.getByRole("heading", { name: "Polish the welcome page" }),
+        page.getByRole("region", { name: "Conversation about this Work" }),
     ).toBeVisible();
     await expect(review.getByText("3 files changed")).toBeVisible();
+    expect(await trigger.boundingBox()).toEqual(closedPosition);
+    expect(
+        await page.evaluate(() => document.documentElement.scrollHeight),
+    ).toBe(960);
     await expect(
         review.getByRole("button", { name: "All files", pressed: true }),
     ).toBeVisible();
@@ -246,7 +261,11 @@ test("Changes keeps long files readable from the narrow in-page review", async (
     const trigger = page.getByRole("button", { name: "Changes", exact: true });
     await trigger.click();
     const review = page.getByRole("region", { name: "Changes", exact: true });
-    await expect(trigger).toBeHidden();
+    await expect(trigger).toBeVisible();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await expect(
+        page.getByRole("region", { name: "Conversation about this Work" }),
+    ).toBeHidden();
     await review.getByRole("button", { name: "By file" }).click();
     await expect(
         review.getByRole("combobox", { name: "Changed file" }),
@@ -256,8 +275,176 @@ test("Changes keeps long files readable from the narrow in-page review", async (
     await expect(
         review.getByText("+++ final line", { exact: true }),
     ).toBeVisible();
-    await review.getByRole("button", { name: "Close changes" }).click();
+    await trigger.click();
     await expect(trigger).toBeFocused();
+    await expect(
+        page.getByRole("region", { name: "Conversation about this Work" }),
+    ).toBeVisible();
+});
+
+test("review feedback uses the Work composer without consuming the context draft", async ({
+    page,
+}) => {
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await workspace(page);
+    const at = "2026-09-21T00:00:00Z";
+    const history = [
+        {
+            sequence: "1",
+            kind: "ResultProposed",
+            attemptId: "1",
+            text: welcomeResult,
+            occurredAt: at,
+        },
+    ];
+    const commands: Record<string, unknown>[] = [];
+    await page.route("**/api/work", (route) =>
+        route.fulfill({
+            json: [
+                {
+                    version: String(commands.length + 1),
+                    createdAt: at,
+                    updatedAt: at,
+                    work: {
+                        id: "1",
+                        objective: "Review the welcome page",
+                        status: commands.length ? "Ready" : "NeedsAttention",
+                        attention: commands.length
+                            ? undefined
+                            : { reason: "ResultReview" },
+                        agentId: "1",
+                        attempts: [
+                            {
+                                id: "1",
+                                status: "Succeeded",
+                                target: {
+                                    runtime: "codex",
+                                    repository: {
+                                        repository: "owner/project",
+                                        grant: { branch: "goblin/work-1" },
+                                    },
+                                },
+                            },
+                        ],
+                        results: [
+                            {
+                                attemptId: "1",
+                                text: welcomeResult,
+                                requestedChanges: commands[0]?.text,
+                            },
+                        ],
+                        decisions: [],
+                        artifacts: [],
+                        history,
+                    },
+                },
+            ],
+        }),
+    );
+    await page.route("**/api/identities", (route) =>
+        route.fulfill({ json: { ids: [String(commands.length + 90)] } }),
+    );
+    await page.route("**/api/work/commands", (route) => {
+        const command = route.request().postDataJSON();
+        commands.push(command);
+        history.push({
+            sequence: String(history.length + 1),
+            kind:
+                command.action === "RequestChanges"
+                    ? "ChangesRequested"
+                    : "ContextAdded",
+            text: command.text,
+            occurredAt: at,
+            attemptId: "1",
+        });
+        return route.fulfill({ json: {} });
+    });
+    await page.route("**/api/work/1/changes", (route) =>
+        route.fulfill({ status: 404, json: {} }),
+    );
+    await page.goto("/work");
+    await page
+        .getByRole("button", { name: "Review the welcome page", exact: true })
+        .click();
+    await expect(page).toHaveURL(/\/work\?item=1$/);
+    const thread = page.getByRole("region", {
+        name: "Conversation about this Work",
+    });
+    const normal = page.getByPlaceholder("Add context to this work…");
+    const feedback = page.getByPlaceholder(
+        "What would you like Goblin to change?",
+    );
+    const ask = page.getByRole("button", {
+        name: "Ask for changes",
+        exact: true,
+    });
+    await normal.fill("Keep the introduction short.");
+    await ask.click();
+    await expect(feedback).toBeFocused();
+    await expect(feedback).toHaveValue("");
+    await feedback.fill("Add a keyboard navigation example.");
+    const changes = page
+        .getByRole("banner")
+        .getByRole("button", { name: "Changes", exact: true });
+    await changes.click();
+    await expect(thread).toBeVisible();
+    await expect(feedback).toHaveValue("Add a keyboard navigation example.");
+    await changes.click();
+    await page.getByRole("button", { name: "Cancel change request" }).click();
+    await expect(normal).toHaveValue("Keep the introduction short.");
+    await ask.click();
+    await expect(feedback).toHaveValue("Add a keyboard navigation example.");
+    await page.getByRole("button", { name: "Send change request" }).click();
+    await expect(thread).toContainText("Requested changes");
+    await expect(thread).toContainText("Add a keyboard navigation example.");
+    await expect(ask).toHaveCount(0);
+    await expect(normal).toHaveValue("Keep the introduction short.");
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(thread).toContainText("Keep the introduction short.");
+    await expect(normal).toHaveValue("");
+    expect(commands).toMatchObject([
+        {
+            action: "RequestChanges",
+            attemptId: "1",
+            expectedVersion: "1",
+            text: "Add a keyboard navigation example.",
+        },
+        {
+            action: "AddContext",
+            expectedVersion: "2",
+            text: "Keep the introduction short.",
+        },
+    ]);
+});
+
+test("approval from the conversation submits the displayed result's attempt", async ({
+    page,
+}) => {
+    await workspace(page);
+    const commands: unknown[] = [];
+    await page.route("**/api/identities", (route) =>
+        route.fulfill({ json: { ids: ["90"] } }),
+    );
+    await page.route("**/api/work/commands", (route) => {
+        commands.push(route.request().postDataJSON());
+        return route.fulfill({ json: {} });
+    });
+    await page.goto("/work?item=1");
+    const result = page
+        .locator("#work-conversation article")
+        .filter({ hasText: welcomeResult });
+    await result.getByRole("button", { name: "Approve & complete" }).click();
+    await expect
+        .poll(() => commands)
+        .toEqual([
+            {
+                action: "Approve",
+                attemptId: "1",
+                commandId: "90",
+                workId: "1",
+                expectedVersion: "1",
+            },
+        ]);
 });
 
 test("Create work saves a goal and leaves execution for an explicit Start", async ({
@@ -301,7 +488,7 @@ test("Create work saves a goal and leaves execution for an explicit Start", asyn
     await page
         .getByRole("button", { name: "Create work", exact: true })
         .click();
-    await expect(page.locator(".detail h2")).toHaveText(
+    await expect(page.locator(".work-objective-full")).toHaveText(
         "Make the release guide easier to follow",
     );
     await expect(page).toHaveURL(/\/work\?item=11$/);
@@ -365,7 +552,7 @@ test("home, Settings, and collapsing navigation preserve a draft without executi
     expect(commands).toEqual([]);
 });
 
-test("the result leads the Work page, Activity opens on demand, and inspection preserves drafts", async ({
+test("the Work conversation keeps the objective, review and supporting records accessible", async ({
     page,
 }) => {
     const commands = await workspace(page);
@@ -373,27 +560,27 @@ test("the result leads the Work page, Activity opens on demand, and inspection p
     page.on("pageerror", (error) => errors.push(error.message));
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/work?item=1");
-    await expect(page.locator(".detail h2")).toHaveText(
-        "Polish the welcome page",
-    );
-    await expect(page.getByRole("tab")).toHaveCount(0);
-    await expect(page.locator(".work-section h3")).toHaveText([
-        "Outputs",
-        "Progress",
-        "Executions",
-        "Details",
-    ]);
-    await expect(page.locator("#result-1")).toHaveAttribute("open", "");
-    await expect(page.locator("#result-1 .inspection")).toBeInViewport();
-    await expect(page.locator("#work-outputs")).not.toContainText(
-        "fixture-model",
-    );
     await expect(
-        page.getByRole("region", { name: "Current status" }),
-    ).toContainText("Ready for your review");
+        page.getByRole("heading", { name: "Work 1", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("tab")).toHaveCount(0);
+    const conversation = page.getByRole("region", {
+        name: "Conversation about this Work",
+    });
+    const objective = conversation.locator("#work-objective");
+    await expect(objective.locator("p")).toBeHidden();
+    await objective.locator("summary").click();
+    await expect(objective.locator("p")).toHaveText("Polish the welcome page");
+    const result = conversation
+        .locator("article")
+        .filter({ hasText: welcomeResult });
+    await expect(result).toBeInViewport();
+    await expect(page.locator(".detail .status-pill")).toHaveText(
+        "Ready for review",
+    );
     await expect(page.locator(".activity-panel")).toBeHidden();
     await expect(
-        page.getByRole("button", { name: "Approve & complete" }),
+        result.getByRole("button", { name: "Approve & complete" }),
     ).toBeVisible();
     const center = (await page.locator(".main-shell").boundingBox())!;
     const navigation = (await page.locator(".sidebar").boundingBox())!;
@@ -402,29 +589,22 @@ test("the result leads the Work page, Activity opens on demand, and inspection p
     await page.getByRole("button", { name: "Activity", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Activity" })).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(page.locator("#work-conversation")).toBeHidden();
+    await expect(conversation).toBeVisible();
     const draft = page.getByPlaceholder("Add context to this work…");
     await draft.fill("Keep the review draft");
-    await page.getByRole("button", { name: "Read proposed result" }).click();
-    await expect(page.locator("#result-1")).toHaveAttribute("open", "");
-    await page
-        .getByRole("button", { name: "Conversation", exact: true })
-        .click();
-    await expect(
-        page.getByRole("region", { name: "Conversation about this Work" }),
-    ).toContainText("The welcome page is ready for review");
+    await page.getByRole("button", { name: "Outputs", exact: true }).click();
+    await expect(page.locator("#work-outputs")).toHaveAttribute("open", "");
+    await expect(page.locator("#result-1 .inspection")).toBeVisible();
+    await expect(page.locator("#work-outputs")).not.toContainText(
+        "fixture-model",
+    );
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
-    await expect(page.locator("#result-1")).toHaveAttribute("open", "");
+    await expect(objective).toHaveAttribute("open", "");
+    await expect(page.locator("#work-outputs")).toHaveAttribute("open", "");
     await expect(draft).toHaveValue("Keep the review draft");
-    await expect(
-        page.getByRole("button", { name: "Hide conversation" }),
-    ).toHaveAttribute("aria-expanded", "true");
-    await page.getByRole("button", { name: "Hide conversation" }).click();
     await page.locator("#result-1 > summary").click();
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await expect(page.locator("#result-1")).not.toHaveAttribute("open", "");
-    await page.getByRole("button", { name: "Read proposed result" }).click();
-    await expect(page.locator("#result-1")).toHaveAttribute("open", "");
     await page.locator(".detail-body").evaluate((el) => {
         el.scrollTop = 0;
     });
@@ -450,7 +630,7 @@ test("workspace search finds Work content without changing the open item", async
 }) => {
     await workspace(page);
     await page.goto("/work?item=1");
-    await expect(page.locator(".detail h2")).toHaveText(
+    await expect(page.locator(".work-objective-full")).toHaveText(
         "Polish the welcome page",
     );
     await page.getByRole("button", { name: "Search", exact: true }).click();
@@ -465,7 +645,7 @@ test("workspace search finds Work content without changing the open item", async
     await expect(items).toHaveCount(1);
     await search.fill("shorter");
     await expect(items).toHaveCount(3);
-    await expect(page.locator(".detail h2")).toHaveText(
+    await expect(page.locator(".work-objective-full")).toHaveText(
         "Polish the welcome page",
     );
     await results
@@ -610,7 +790,7 @@ test("Work inbox scopes status to List and restores inbox state after viewing Wo
     await expect(page).toHaveURL(/\/work\?item=3$/);
     await expect(inbox).toHaveCount(0);
     await expect(
-        page.getByRole("heading", { name: "Write the release notes" }),
+        page.getByRole("heading", { name: "Work 3", exact: true }),
     ).toBeFocused();
     await page.goBack();
     await expect(closed).toBeFocused();
@@ -633,13 +813,13 @@ test("Work inbox scopes status to List and restores inbox state after viewing Wo
     await expect(inbox).toHaveCount(0);
     const detail = page.getByRole("region", { name: "Selected work" });
     await expect(
-        detail.getByRole("heading", { name: "Polish the welcome page" }),
+        detail.getByRole("heading", { name: "Work 1", exact: true }),
     ).toBeFocused();
     await expect(
-        detail.getByRole("heading", { name: "Outputs" }),
+        detail.getByRole("button", { name: "Outputs", exact: true }),
     ).toBeVisible();
     await expect(
-        detail.getByRole("button", { name: "Conversation", exact: true }),
+        detail.getByRole("region", { name: "Conversation about this Work" }),
     ).toBeVisible();
     await expect(
         detail.getByRole("button", { name: "Activity", exact: true }),
@@ -962,7 +1142,7 @@ for (const width of [1024, 390, 320]) {
                 .getByRole("region", { name: "Search results" })
                 .getByRole("button", { name: "Polish the welcome page" })
                 .click();
-            await expect(page.locator(".detail h2")).toHaveText(
+            await expect(page.locator(".work-objective-full")).toHaveText(
                 "Polish the welcome page",
             );
             await expect(page.getByRole("searchbox")).toBeHidden();
@@ -1064,7 +1244,7 @@ test("completed work keeps outputs, sharing, and agent inspection available with
     );
     await page.setViewportSize({ width: 1743, height: 902 });
     await page.goto("/work?item=3");
-    await expect(page.locator(".detail h2")).toHaveText(objective);
+    await expect(page.locator(".work-objective-full")).toHaveText(objective);
     await expect(
         page.locator(".progress-row .milestone-icon.complete"),
     ).toHaveCount(3);
@@ -1097,11 +1277,12 @@ test("completed work keeps outputs, sharing, and agent inspection available with
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
         page.url(),
     );
-    await page.getByRole("button", { name: "View all", exact: true }).click();
+    await page.getByRole("button", { name: "Outputs", exact: true }).click();
     await expect(page.locator("#all-outputs")).toHaveAttribute("open", "");
     await expect(
         page.locator("#work-outputs .output-row > summary:visible"),
     ).toHaveCount(4);
+    await page.locator("#work-reference > summary").click();
     await expect(
         page
             .getByRole("region", { name: "Executions", exact: true })
@@ -1201,6 +1382,7 @@ test("a result stays prominent among newer artifacts and older executions remain
     );
     await page.goto("/work?item=1");
     const outputs = page.getByRole("region", { name: "Outputs", exact: true });
+    await page.getByRole("button", { name: "Outputs", exact: true }).click();
     await expect(outputs.locator(".output-row").first()).toHaveAttribute(
         "id",
         "result-4",
@@ -1420,6 +1602,7 @@ test("uncertain execution stays unresolved, and runtime details never become mil
     await expect(page.locator(".activity-panel")).not.toContainText(
         "Read a file",
     );
+    await page.locator("#work-reference > summary").click();
     await page.locator("#decision-8 summary").click();
     await expect(page.locator("#decision-8 .inspection")).toContainText(unsafe);
     await expect(page.locator('img[src="x"]')).toHaveCount(0);

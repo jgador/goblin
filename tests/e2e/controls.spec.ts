@@ -125,7 +125,7 @@ async function setup(
         return route.fulfill({ json: data[path] ?? [] });
     });
     await page.goto("/work?item=1");
-    await expect(page.locator(".detail h2")).toHaveText(
+    await expect(page.locator(".work-objective-full")).toHaveText(
         "Review the release checklist",
     );
     return commands;

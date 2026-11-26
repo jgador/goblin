@@ -27,7 +27,7 @@ import type {
     Work,
 } from "./contracts.js";
 import { ComposerDrafts } from "./drafts.js";
-import type { DraftSnapshot } from "./drafts.js";
+import type { DraftMode, DraftSnapshot } from "./drafts.js";
 import { ModelCatalogs } from "./model-catalog.js";
 import {
     ModelSelections,
@@ -44,6 +44,7 @@ import {
     repositoryApprovalKey,
     RepositoryDrafts,
 } from "./repository-setup.js";
+import { reviewableResult } from "./surface.js";
 import { WorkspaceController } from "./workspace.js";
 import { WorkspaceDom } from "./workspace-dom.js";
 import { renderWorkspace } from "./workspace-view.js";
@@ -64,7 +65,6 @@ const commands = new WorkCommands(
 const mobile = matchMedia("(max-width: 760px)");
 const compact = matchMedia("(max-width: 1199px)");
 let activityOpen = false,
-    conversationExpanded = false,
     conversationsOpen = navigation.view === "chat",
     listStatus: ListStatus = "all",
     boardLayout: BoardLayout = "list",
@@ -101,8 +101,8 @@ const modelCatalogs = new ModelCatalogs(
 let modelPickerOpen = false,
     modelListOpen = false;
 let authenticated = false,
-    error = "",
-    changing = false;
+    error = "";
+let reviewAttempt: string | undefined;
 let activeRefresh: Promise<void> | undefined;
 let commandActive = false;
 type SubmissionContext = { origin: WorkspaceContext; draft?: DraftSnapshot };
@@ -236,7 +236,7 @@ function forgetWorkspace() {
     drafts.clear();
     repositoryDrafts.clear();
     pendingContext = undefined;
-    changing = false;
+    reviewAttempt = undefined;
     listStatus = "all";
     searchOpen = false;
     search = "";
@@ -353,7 +353,7 @@ async function send(
         ? {
               origin: navigation.context,
               draft: consumesDraft
-                  ? drafts.capture(navigation.context)
+                  ? drafts.capture(navigation.context, composerDraftMode())
                   : undefined,
           }
         : (pendingContext ??
@@ -378,7 +378,12 @@ async function send(
         confirmed = true;
         if (context.draft) drafts.confirm(context.draft);
         if (navigation.context === context.origin) {
-            if (context.draft) changing = false;
+            if (
+                saved.path === "/api/work/commands" &&
+                saved.body.action === WorkAction.RequestChanges &&
+                saved.body.attemptId === reviewAttempt
+            )
+                reviewAttempt = undefined;
             if (
                 saved.path === "/api/work/commands" &&
                 saved.body.action === WorkAction.Create
@@ -426,8 +431,7 @@ function navigate(
     searchOpen = false;
     if (next === "board" && previous !== "board") search = inboxSearch;
     else if (navigation.isDirectory) search = "";
-    changing = false;
-    conversationExpanded = false;
+    reviewAttempt = undefined;
     activityOpen = false;
     modelPickerOpen = false;
     modelListOpen = false;
@@ -455,6 +459,10 @@ function openSearch() {
     document.getElementById("work-search")?.focus();
 }
 
+function composerDraftMode(): DraftMode {
+    return reviewAttempt ? `review:${reviewAttempt}` : "message";
+}
+
 function render(preserveMounted = false, forceSelect = false) {
     const { context, view, settingsSection } = navigation;
     if (context !== dom.context) {
@@ -469,7 +477,9 @@ function render(preserveMounted = false, forceSelect = false) {
             ? work.id
             : undefined,
     );
-    const draft = drafts.get(context);
+    if (reviewableResult(work)?.attemptId !== reviewAttempt)
+        reviewAttempt = undefined;
+    const draft = drafts.get(context, composerDraftMode());
     const submissionState = {
         sending: commandActive,
         pending: !!submission.pending,
@@ -503,14 +513,13 @@ function render(preserveMounted = false, forceSelect = false) {
                 sidebarCollapsed,
                 activityOpen,
                 changesOpen: workChanges.isOpen,
-                conversationExpanded,
                 conversationsOpen,
                 listStatus,
                 boardLayout,
                 search,
                 searchOpen,
                 draft,
-                changing,
+                changing: !!reviewAttempt,
                 authenticated,
                 sessionChecked,
                 sessionFailures,
@@ -750,10 +759,11 @@ document.addEventListener("click", async (event) => {
     if (action === "view-outputs") {
         const all = root.querySelector<HTMLDetailsElement>("#all-outputs");
         if (all) all.open = true;
-        document
-            .getElementById("work-outputs")
-            ?.scrollIntoView({ block: "start" });
-        root.querySelector<HTMLElement>("#work-outputs summary")?.focus({
+        const outputs = root.querySelector<HTMLDetailsElement>("#work-outputs");
+        if (!outputs) return;
+        outputs.open = true;
+        outputs.scrollIntoView({ block: "start" });
+        outputs.querySelector("summary")?.focus({
             preventScroll: true,
         });
         return;
@@ -814,9 +824,8 @@ document.addEventListener("click", async (event) => {
             ?.focus();
         return;
     }
-    if (action === "toggle-conversation")
-        conversationExpanded = !conversationExpanded;
     if (action === "discuss-goal") {
+        reviewAttempt = undefined;
         if (!drafts.get(navigation.context))
             drafts.set(navigation.context, "I'd like to clarify the goal: ");
         render();
@@ -830,11 +839,12 @@ document.addEventListener("click", async (event) => {
             target.dataset.id!,
         ) as HTMLDetailsElement | null;
         if (output) {
-            const all = output.closest<HTMLDetailsElement>(
-                "#all-outputs, #all-executions",
-            );
-            if (all) all.open = true;
-            output.open = true;
+            let disclosure = output.closest("details");
+            while (disclosure) {
+                disclosure.open = true;
+                disclosure =
+                    disclosure.parentElement?.closest("details") ?? null;
+            }
             output.scrollIntoView({ block: "nearest" });
             output.querySelector("summary")?.focus({ preventScroll: true });
         }
@@ -848,10 +858,6 @@ document.addEventListener("click", async (event) => {
             render(false, true);
             workChanges.focus();
         }
-        return;
-    }
-    if (action === "close-changes") {
-        closeChanges();
         return;
     }
     if (action === "lock") {
@@ -893,8 +899,15 @@ document.addEventListener("click", async (event) => {
     if (action === "select-chat") navigate("chat", target.dataset.id!);
     if (action === "select-work") navigate("work", target.dataset.id!);
 
-    if (action === "changes") changing = true;
     const work = current()?.work;
+    if (action === "changes") {
+        const result = reviewableResult(work);
+        if (!result) return;
+        reviewAttempt = reviewAttempt ? undefined : result.attemptId;
+        render();
+        document.getElementById("reply")?.focus();
+        return;
+    }
     if (action === "execute" && work)
         await command({ action: WorkAction.Execute, ...modelPayload(work) });
     if (action === "retry" && work)
@@ -915,17 +928,19 @@ document.addEventListener("click", async (event) => {
     }
     if (action === "reconcile") await command({ action: WorkAction.Reconcile });
     if (action === "cancel") await command({ action: WorkAction.Cancel });
-    if (action === "approve")
-        await command({
-            action: WorkAction.Approve,
-            attemptId: work?.attempts.at(-1)?.id,
-        });
+    if (action === "approve") {
+        const result = reviewableResult(work);
+        if (result)
+            await command({
+                action: WorkAction.Approve,
+                attemptId: result.attemptId,
+            });
+    }
     if (action === "track" && navigation.activeChat) {
         const conversationId = navigation.activeChat;
         await send(() => commands.track(conversationId));
     }
     render();
-    if (action === "changes") document.getElementById("reply")?.focus();
     if (action === "clear-search")
         document.getElementById("work-search")?.focus();
     if (
@@ -993,9 +1008,16 @@ document.addEventListener("submit", async (event) => {
         await send(() => commands.append(conversationId, text), true);
     } else if (kind === "work") {
         const work = current()?.work;
+        if (
+            reviewAttempt &&
+            reviewableResult(work)?.attemptId !== reviewAttempt
+        ) {
+            render();
+            return;
+        }
         await command(
             {
-                action: changing
+                action: reviewAttempt
                     ? WorkAction.RequestChanges
                     : work?.attention?.reason === AttentionReason.InputRequired
                       ? WorkAction.Answer
@@ -1040,9 +1062,10 @@ document.addEventListener("input", (event) => {
     }
     if (
         event.target instanceof HTMLTextAreaElement &&
+        event.target.id === "reply" &&
         root.contains(event.target)
     )
-        drafts.set(navigation.context, event.target.value);
+        drafts.set(navigation.context, event.target.value, composerDraftMode());
     if (
         event.target instanceof HTMLInputElement &&
         event.target.id === "work-search"
@@ -1108,7 +1131,16 @@ function trapFocus(event: KeyboardEvent, selector: string) {
         root.querySelectorAll<HTMLElement>(
             `${selector} a, ${selector} button, ${selector} input, ${selector} select, ${selector} summary`,
         ),
-    ).filter((x) => x.getClientRects().length && !x.matches(":disabled"));
+    ).filter((target) => {
+        const disclosure = target.matches("summary")
+            ? target.parentElement
+            : target;
+        return (
+            target.getClientRects().length &&
+            !target.matches(":disabled") &&
+            !disclosure?.parentElement?.closest("details:not([open])")
+        );
+    });
     const first = targets[0],
         last = targets.at(-1);
     if (event.shiftKey && document.activeElement === first) {
@@ -1123,8 +1155,10 @@ function trapFocus(event: KeyboardEvent, selector: string) {
 document.addEventListener("keydown", (event) => {
     if (
         event.key === "Escape" &&
+        workChanges.isOpen &&
         event.target instanceof Element &&
-        workChanges.element.contains(event.target)
+        (workChanges.element.contains(event.target) ||
+            event.target.id === "show-changes")
     ) {
         event.preventDefault();
         closeChanges();

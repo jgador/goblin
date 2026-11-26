@@ -22,16 +22,21 @@ begins execution separately. An authorized Slack DM or mention creates and start
 see [Slack](slack-integration.md). An untracked browser conversation stores context
 without running an agent; **Track this work** creates Work from it.
 
-The current status panel offers the next permitted action. Answer questions, review
-results with **Approve** or **Request changes**, and recover failures with an explicit
-retry or reconciliation. Repository setup uses a saved authorization preview; see
-[repository authority](git-repository-intent.md). Reading or expanding content never
-submits a command. Execution details preserve agent, runtime, requested and reported
+Open the first message to read the full objective. Goblin posts questions and
+proposed results in the Work conversation. Approve a result from its message or
+choose **Ask for changes** in the composer to send review feedback. The composer
+keeps separate drafts for context and review feedback. **Outputs** opens saved
+results and artifacts, and **Work details** opens progress and execution records.
+
+Use the current status panel to recover failures with an explicit retry or
+reconciliation. Repository setup uses a
+[saved authorization preview](git-repository-intent.md). Reading or expanding
+content never submits a command. Execution details preserve agent, runtime, requested and reported
 model, branch, and environment provenance.
 
-**Changes** opens the latest verified repository diff within the Work page. **All files**
-shows a continuous review, and **By file** lets you select a path. Expand a file or
-load more lines to read longer diffs. The
+**Changes** in the workspace toolbar opens and closes the latest verified repository
+diff. **All files** shows a continuous review, and **By file** lets you select a
+path. Expand a file or load more lines to read longer diffs. The
 [saved diff](workspace-lifecycle.md#files-and-git-checkpoints) is available while the
 execution pod is stopped and is cleared when the Work closes.
 

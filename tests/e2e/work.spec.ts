@@ -38,7 +38,9 @@ test.describe("durable Work", () => {
         await page
             .getByRole("button", { name: "Create work", exact: true })
             .click();
-        await expect(page.locator(".detail h2")).toHaveText(objective);
+        await expect(page.locator(".work-objective-full")).toHaveText(
+            objective,
+        );
         await expect(
             page.getByRole("button", { name: "Assign agent", exact: true }),
         ).toHaveCount(0);
@@ -183,7 +185,9 @@ test.describe("durable Work", () => {
         await page
             .getByRole("button", { name: "Create work", exact: true })
             .click();
-        await expect(page.locator(".detail h2")).toHaveText(objective);
+        await expect(page.locator(".work-objective-full")).toHaveText(
+            objective,
+        );
         await page.locator(".model-picker-trigger").click();
         const popover = page.getByRole("dialog", {
             name: "Model and reasoning effort",
@@ -279,7 +283,7 @@ test.describe("durable Work", () => {
         await page
             .getByRole("button", { name: "Track this work", exact: true })
             .click();
-        await expect(page.locator(".detail h2")).toContainText(
+        await expect(page.locator(".work-objective-full")).toContainText(
             "Plan a release",
         );
         await page.locator(".model-picker-trigger").click();
@@ -349,7 +353,7 @@ test.describe("durable Work", () => {
         ).toBeVisible({ timeout: 15000 });
         await page.getByRole("button", { name: "Ask for changes" }).click();
         await page.getByRole("textbox").fill("Include validation steps.");
-        await page.getByRole("button", { name: "Send message" }).click();
+        await page.getByRole("button", { name: "Send change request" }).click();
         await page
             .getByRole("button", { name: "Start work", exact: true })
             .click();
@@ -360,7 +364,12 @@ test.describe("durable Work", () => {
             "Completed",
         );
         await page.reload();
-        await page.getByRole("button", { name: new RegExp(objective) }).click();
+        await expect(page.locator(".work-objective-full")).toHaveText(
+            objective,
+        );
+        await page
+            .getByRole("button", { name: "Outputs", exact: true })
+            .click();
         await expect(
             page
                 .locator(".output-row summary")
@@ -375,8 +384,9 @@ test.describe("durable Work", () => {
                 .filter({ hasText: "Result approved" }),
         ).toBeVisible();
         await page.keyboard.press("Escape");
+        await page.locator("#work-reference > summary").click();
         await page
-            .locator(".output-row summary")
+            .locator("#work-reference .output-row summary")
             .filter({ hasText: "codex" })
             .first()
             .click();
@@ -441,7 +451,7 @@ test.describe("durable Work", () => {
         await page
             .getByRole("button", { name: "Track this work", exact: true })
             .click();
-        await expect(page.locator(".detail h2")).toHaveText(text);
+        await expect(page.locator(".work-objective-full")).toHaveText(text);
         await page.reload();
         await page.keyboard.press("Control+k");
         await page.getByRole("searchbox").fill(text);
@@ -502,7 +512,9 @@ test.describe("durable Work", () => {
         ).toBeVisible();
         await page.reload();
         await page.getByRole("button", { name: "Resend command" }).click();
-        await expect(page.locator(".detail h2")).toHaveText(objective);
+        await expect(page.locator(".work-objective-full")).toHaveText(
+            objective,
+        );
         const saved = await (await page.request.get("/api/work")).json();
         expect(
             saved.filter(
@@ -543,7 +555,9 @@ test.describe("durable Work", () => {
         await page
             .getByRole("button", { name: "Create work", exact: true })
             .click();
-        await expect(page.locator(".detail h2")).toHaveText(objective);
+        await expect(page.locator(".work-objective-full")).toHaveText(
+            objective,
+        );
         expect(submissions).toBe(1);
     });
 
@@ -578,7 +592,7 @@ test.describe("durable Work", () => {
         ).toBeVisible();
         expect((await page.request.get("/readyz")).status()).toBe(200);
         await page.reload();
-        await expect(page.locator(".detail h2")).toContainText(
+        await expect(page.locator(".work-objective-full")).toContainText(
             "History remains available",
         );
     });

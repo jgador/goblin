@@ -37,7 +37,6 @@ export class WorkChangesPanel {
                     <h2 id="work-changes-title" tabindex="-1">Changes</h2>
                     <div class="work-changes-meta"></div>
                 </div>
-                <button class="icon-button" data-action="close-changes" aria-label="Close changes" title="Close changes">${icon("close")}</button>
             </header>
             <div class="work-changes-toolbar" hidden>
                 <div class="work-changes-modes" role="group" aria-label="Diff view">
