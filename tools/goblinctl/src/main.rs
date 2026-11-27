@@ -16,7 +16,6 @@ use goblinctl::k3s::K3s;
 use goblinctl::k3s::{self};
 use goblinctl::operations;
 use goblinctl::postgres::Access;
-use goblinctl::postgres::PortConflictPolicy;
 use goblinctl::postgres::Role;
 use goblinctl::postgres::Source;
 use goblinctl::postgres::Store;
@@ -596,16 +595,17 @@ fn database_action(command: DbCommand) -> Result<()> {
             } else {
                 ssh.map(|destination| Source::Ssh { destination })
             };
-            let policy = if force {
-                PortConflictPolicy::TakeOver
+            let store = Store::user()?;
+            if force {
+                let port = port_forward.context("--force requires --port-forward")?;
+                store.connect_forcing_port(&profile, source, port, role)?;
             } else {
-                PortConflictPolicy::Report
-            };
-            Store::user()?.connect(&profile, source, port_forward, role, policy)?;
+                store.connect(&profile, source, port_forward, role)?;
+            }
             Ok(())
         }
         DbCommand::Refresh { profile, role } => {
-            Store::user()?.connect(&profile, None, None, role, PortConflictPolicy::Report)?;
+            Store::user()?.connect(&profile, None, None, role)?;
             Ok(())
         }
         DbCommand::Export {
@@ -620,8 +620,7 @@ fn database_action(command: DbCommand) -> Result<()> {
             usage,
             command,
         } => {
-            let client =
-                Store::user()?.connect(&profile, None, None, role, PortConflictPolicy::Report)?;
+            let client = Store::user()?.connect(&profile, None, None, role)?;
             let mut child = Command::new(&command[0]);
             child.args(&command[1..]);
             match usage {

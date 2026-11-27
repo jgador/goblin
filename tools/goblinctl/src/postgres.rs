@@ -26,7 +26,7 @@ mod access;
 mod port;
 mod windows;
 
-pub enum PortConflictPolicy {
+enum PortConflictPolicy {
     Report,
     TakeOver,
 }
@@ -256,6 +256,33 @@ impl Store {
         source: Option<Source>,
         port: Option<u16>,
         access: Access,
+    ) -> Result<Client> {
+        self.connect_with_policy(name, source, port, access, PortConflictPolicy::Report)
+    }
+
+    /// Allow takeover of the explicitly selected local forwarding port.
+    pub fn connect_forcing_port(
+        &self,
+        name: &str,
+        source: Option<Source>,
+        port: u16,
+        access: Access,
+    ) -> Result<Client> {
+        self.connect_with_policy(
+            name,
+            source,
+            Some(port),
+            access,
+            PortConflictPolicy::TakeOver,
+        )
+    }
+
+    fn connect_with_policy(
+        &self,
+        name: &str,
+        source: Option<Source>,
+        port: Option<u16>,
+        access: Access,
         policy: PortConflictPolicy,
     ) -> Result<Client> {
         let directory = self.directory(name)?;
@@ -404,7 +431,7 @@ impl Store {
         Ok(client)
     }
     pub fn export_windows(&self, name: &str, role: Role) -> Result<()> {
-        let client = self.connect(name, None, None, role.into(), PortConflictPolicy::Report)?;
+        let client = self.connect(name, None, None, role.into())?;
         let _lock = self.lock(&client.directory)?;
         let mut profile = self.read(&client.directory)?;
         // Re-read the endpoint under the lock: a concurrent connect may have changed the port.

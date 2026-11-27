@@ -30,6 +30,9 @@ can be any port from 1024 to 65535 except the reserved database port 5432.
 Connect checks for WSL port conflicts, and export checks for Windows port conflicts.
 Export also verifies the database identity and TLS login before writing the Windows files.
 
+To keep the WSL profile under the repository, see
+[Store a client profile in this checkout](#store-a-client-profile-in-this-checkout).
+
 ### Reconnect or refresh
 
 After restarting WSL or renewing certificates, run this from the repository root in a
@@ -131,9 +134,10 @@ it with `connect --port-forward PORT`. Disconnect stops only this profile's forw
 preserving settings and credentials. It does not stop the installation's loopback
 endpoint. Linux refresh does not update Windows exports.
 
-Source certificates come from Kubernetes Secrets; the CA signing key stays there. Linux
-profiles are under `~/.config/goblin/postgres/<profile>/` (or `XDG_CONFIG_HOME`) with
-private directory/file modes. Windows exports are under
+Source certificates come from Kubernetes Secrets, where the CA signing key stays.
+Linux profiles live under `$XDG_CONFIG_HOME/goblin/postgres/<profile>/` with private
+directory and file modes. When `XDG_CONFIG_HOME` is unset or empty, the base directory
+is `~/.config`. Windows exports are under
 `%LOCALAPPDATA%\Goblin\postgres\<profile>\`, one directory per role with private ACLs.
 Export only the role needed. Profiles pass connection settings to children, not
 appsettings files.
@@ -143,6 +147,31 @@ the original installation or use a new profile name. After deliberately
 [recreating development](../deploy/k3s/README.md#stop-resume-or-start-clean), disconnect
 and remove that installation's old Linux profile and Windows export before reusing the
 name.
+
+### Store a client profile in this checkout
+
+Install k3s and build `goblinctl` as described in the [WSL setup](#wsl-and-windows-pgadmin).
+From the repository root in WSL, set `XDG_CONFIG_HOME` on each command to store the
+complete Linux profile in the Git-ignored `.artifacts/db-client/goblin/postgres/`
+directory. Choose a profile name that is unused in WSL and Windows.
+
+```bash
+XDG_CONFIG_HOME="$PWD/.artifacts/db-client" \
+  ./target/debug/goblinctl db connect wsl-artifacts --local --port-forward 55432
+XDG_CONFIG_HOME="$PWD/.artifacts/db-client" \
+  ./target/debug/goblinctl db export wsl-artifacts --client windows --role app
+```
+
+Import the printed `pgAdmin.json` from Windows AppData. Use the same config directory
+and profile name for subsequent profile commands. For direct WSL development, pass
+the config directory and `DB_PROFILE` to the [Make target](#daily-development).
+
+```bash
+XDG_CONFIG_HOME="$PWD/.artifacts/db-client" make dev-start DB_PROFILE=wsl-artifacts
+```
+
+Before moving or removing a profile directory, run `db disconnect` with the original
+`XDG_CONFIG_HOME` and profile name.
 
 ## Installation and certificates
 
