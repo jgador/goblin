@@ -190,11 +190,13 @@ history sequence `work_event_id_seq` has no table.
 
 The [SQL baseline](../backend/database/migrations/0001_initial.sql) lists every table.
 Wolverine tables keep their library names (`wolverine_` prefix) and key types, and the
-baseline DDL must match Wolverine's own SQL because startup uses `AutoCreate.None`. The
-four OpenIddict tables keep their quoted names and are mapped by
-`ChatGptOAuthDbContext`; see [ChatGPT authentication](chatgpt-integration.md). The
-`schema_migration` journal is administrator-only. Wolverine, OpenIddict, and the journal
-are excluded from product scaffolding.
+baseline DDL must match Wolverine's own SQL because startup uses `AutoCreate.None`.
+`ChatGptOAuthDbContext` maps OpenIddict's native long-key entities to the singular
+`openiddict_application`, `openiddict_authorization`, `openiddict_scope`, and
+`openiddict_token` tables with unquoted `snake_case` columns. See
+[ChatGPT authentication](chatgpt-integration.md). The `schema_migration` journal is
+administrator-only. Wolverine, OpenIddict, and the journal are excluded from product
+scaffolding.
 
 ### Apply the SQL schema
 

@@ -160,7 +160,7 @@ public sealed class PostgresTests
             WHERE n.nspname = 'public' AND c.relname NOT LIKE 'wolverine_%'
               AND (i.indnatts <> 1 OR NOT EXISTS (
                 SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid
-                  AND a.attnum = ANY(i.indkey) AND a.attname = CASE WHEN c.relname LIKE 'OpenIddict%' THEN 'Id' ELSE 'id' END AND a.atttypid = 'int8'::regtype))
+                  AND a.attnum = ANY(i.indkey) AND a.attname = 'id' AND a.atttypid = 'int8'::regtype))
             """, admin))
             Assert.Equal(0L, await keys.ExecuteScalarAsync());
         await using (var schemas = new NpgsqlCommand("SELECT array_agg(DISTINCT schemaname::text) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema');", admin))
@@ -213,17 +213,17 @@ public sealed class PostgresTests
     }
 
     [PostgresFact]
-    public async Task FreshCatalogContainsExactlySingularGoblinAndNativeLibraryObjects()
+    public async Task FreshCatalogContainsExactlyTheExpectedSchemaObjects()
     {
         await using TestDatabase database = await TestDatabase.CreateAsync();
         await using var admin = new NpgsqlConnection(database.AdminConnection);
         await admin.OpenAsync();
         string[] expected =
         [
-            "OpenIddictApplications", "OpenIddictAuthorizations", "OpenIddictScopes", "OpenIddictTokens",
             "agent", "connection", "connection_model_catalog", "conversation", "conversation_message",
             "execution_attempt", "external_conversation", "external_identity", "external_link_request",
-            "external_message", "github_connection", "github_repository", "repository_operation",
+            "external_message", "github_connection", "github_repository", "openiddict_application",
+            "openiddict_authorization", "openiddict_scope", "openiddict_token", "repository_operation",
             "repository_setup_memory", "schema_migration", "wolverine_agent_restrictions",
             "wolverine_control_queue", "wolverine_dead_letters", "wolverine_incoming_envelopes",
             "wolverine_node_assignments", "wolverine_node_records", "wolverine_nodes",
@@ -246,16 +246,15 @@ public sealed class PostgresTests
             Assert.True(await row.ReadAsync());
             string type = table == "wolverine_node_records" ? "integer" : table == "wolverine_node_assignments" ? "character varying" : table.StartsWith("wolverine_", StringComparison.Ordinal) ? "uuid" : "bigint";
             Assert.Equal(type, row.GetString(0));
-            Assert.Equal(table.StartsWith("OpenIddict", StringComparison.Ordinal) ? "PK_" + table : table.StartsWith("wolverine_", StringComparison.Ordinal) ? "pkey_" + table + "_id" : table + "_pkey", row.GetString(1));
+            Assert.Equal(table.StartsWith("wolverine_", StringComparison.Ordinal) ? "pkey_" + table + "_id" : table + "_pkey", row.GetString(1));
             Assert.False(await row.ReadAsync());
         }
         foreach (string table in expected)
         {
             if (table == "github_repository" || table.StartsWith("wolverine_", StringComparison.Ordinal)) continue;
-            await using var sequence = new NpgsqlCommand("SELECT pg_get_serial_sequence('public.' || quote_ident(@table), @column)", admin);
+            await using var sequence = new NpgsqlCommand("SELECT pg_get_serial_sequence('public.' || quote_ident(@table), 'id')", admin);
             sequence.Parameters.AddWithValue("table", table);
-            sequence.Parameters.AddWithValue("column", table.StartsWith("OpenIddict", StringComparison.Ordinal) ? "Id" : "id");
-            Assert.Equal(table.StartsWith("OpenIddict", StringComparison.Ordinal) ? "public.\"" + table + "_Id_seq\"" : "public." + table + "_id_seq", await sequence.ExecuteScalarAsync());
+            Assert.Equal("public." + table + "_id_seq", await sequence.ExecuteScalarAsync());
         }
         await using (var identities = new NpgsqlCommand("""
             SELECT count(*) FROM pg_attribute a JOIN pg_class t ON t.oid = a.attrelid
@@ -281,7 +280,7 @@ public sealed class PostgresTests
         }
         string[] expectedSequences = [.. expected
             .Where(table => table != "github_repository" && !table.StartsWith("wolverine_", StringComparison.Ordinal))
-            .Select(table => table + (table.StartsWith("OpenIddict", StringComparison.Ordinal) ? "_Id_seq" : "_id_seq"))
+            .Select(table => table + "_id_seq")
             .Concat(["work_event_id_seq", "wolverine_node_records_id_seq", "wolverine_nodes_node_number_seq"])
             .Order(StringComparer.Ordinal)];
         await using (var sequences = new NpgsqlCommand("SELECT array_agg(sequencename::text ORDER BY sequencename) FROM pg_sequences WHERE schemaname = 'public'", admin))
@@ -296,8 +295,28 @@ public sealed class PostgresTests
             Assert.Equal("bigint", row.GetString(0));
             Assert.False(row.GetBoolean(1));
         }
-        await using (var constraints = new NpgsqlCommand("SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid = c.connamespace JOIN pg_class t ON t.oid = c.conrelid WHERE n.nspname = 'public' AND c.contype = 'f' AND c.conname NOT LIKE t.relname || '_%' AND c.conname NOT LIKE 'fkey_wolverine_node_assignments_%' AND (t.relname NOT LIKE 'OpenIddict%' OR c.conname NOT LIKE 'FK_' || t.relname || '_%')", admin))
+        await using (var constraints = new NpgsqlCommand("SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid = c.connamespace JOIN pg_class t ON t.oid = c.conrelid WHERE n.nspname = 'public' AND c.contype = 'f' AND c.conname NOT LIKE t.relname || '_%' AND c.conname NOT LIKE 'fkey_wolverine_node_assignments_%'", admin))
             Assert.Equal(0L, await constraints.ExecuteScalarAsync());
+        await using (var columns = new NpgsqlCommand("""
+            SELECT count(*) FROM information_schema.columns
+            WHERE table_schema = 'public' AND starts_with(table_name, 'openiddict_')
+              AND column_name !~ '^[a-z][a-z0-9_]*$'
+            """, admin))
+            Assert.Equal(0L, await columns.ExecuteScalarAsync());
+        await using (var indexes = new NpgsqlCommand("""
+            SELECT array_agg(indexname::text ORDER BY indexname) FROM pg_indexes
+            WHERE schemaname = 'public' AND starts_with(tablename, 'openiddict_')
+              AND indexname <> tablename || '_pkey'
+            """, admin))
+            Assert.Equal(new[]
+            {
+                "openiddict_application_client_id",
+                "openiddict_authorization_application_id_status_subject_type",
+                "openiddict_scope_name",
+                "openiddict_token_application_id_status_subject_type",
+                "openiddict_token_authorization_id",
+                "openiddict_token_reference_id"
+            }, (string[])(await indexes.ExecuteScalarAsync())!);
         await using (var assignment = new NpgsqlCommand("""
             SELECT conname, confrelid::regclass::text, confdeltype::text
             FROM pg_constraint WHERE conrelid = 'public.wolverine_node_assignments'::regclass AND contype = 'f'
