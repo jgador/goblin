@@ -1,6 +1,8 @@
 //! Forwarders are owned by a durable record independent of successful TLS setup.
+use super::PortConflictPolicy;
 use super::Profile;
 use super::Source;
+use super::port;
 use super::validate_port;
 use super::validate_source;
 use crate::files;
@@ -11,7 +13,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use sha2::Digest;
 use sha2::Sha256;
-use std::net::TcpListener;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -168,12 +169,6 @@ fn stop(directory: &Path, forward: &Forward) -> Result<()> {
     }
     Ok(())
 }
-fn check_port(port: u16) -> Result<()> {
-    for address in ["127.0.0.1", "::1"] {
-        TcpListener::bind((address, port)).with_context(|| format!("WSL forwarding port {port} is occupied. Choose an explicit --forward-port; it will be saved in this profile"))?;
-    }
-    Ok(())
-}
 fn start(directory: &Path, forward: &Forward) -> Result<()> {
     match &forward.source {
         Source::Local => files::run(Command::new("systemd-run").args([
@@ -249,7 +244,12 @@ impl Drop for Connection {
         }
     }
 }
-pub fn connect(directory: &Path, profile: &Profile) -> Result<Connection> {
+pub fn connect(
+    directory: &Path,
+    profile: &Profile,
+    policy: PortConflictPolicy,
+    retry: &str,
+) -> Result<Connection> {
     let Some(port) = profile.forward_port else {
         return Ok(Connection {
             directory: directory.into(),
@@ -283,7 +283,7 @@ pub fn connect(directory: &Path, profile: &Profile) -> Result<Connection> {
             ),
         }
     }
-    check_port(port)?;
+    port::prepare(port, policy, retry)?;
     // Write the new ownership record before starting anything. Preserve the old
     // working listener until all read-only preflight checks have passed.
     if let Some(previous) = &previous {
@@ -294,7 +294,12 @@ pub fn connect(directory: &Path, profile: &Profile) -> Result<Connection> {
         change: Some((current.clone(), previous, was_running)),
     };
     save(directory, &current)?;
-    start(directory, &current)?;
+    if let Err(error) = start(directory, &current) {
+        drop(guard);
+        // A listener can claim the port after the bind probe.
+        port::prepare(port, PortConflictPolicy::Report, retry)?;
+        return Err(error.context(format!("Cannot start forwarding WSL port {port}")));
+    }
     Ok(guard)
 }
 pub fn disconnect(directory: &Path) -> Result<()> {

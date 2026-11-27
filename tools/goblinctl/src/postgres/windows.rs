@@ -15,7 +15,7 @@ pub fn export(name: &str, client: &Client, role: Role) -> Result<()> {
     let port = client
         .profile
         .forward_port
-        .context("Connect with --forward-port before exporting for Windows")?;
+        .context("Connect with --port-forward before exporting for Windows")?;
     // PowerShell resolves the actual Windows account and filesystem; no guessed /mnt/c path.
     let payload = json!({
         "profile":name, "role":role.name(), "port":port,
@@ -36,6 +36,16 @@ pub fn export(name: &str, client: &Client, role: Role) -> Result<()> {
         .write_all(&serde_json::to_vec(&payload)?);
     let output = child.wait_with_output()?;
     written?;
+    if output.status.code() == Some(3) {
+        let owner = String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse::<u32>()
+            .map(|pid| format!(" by PID {pid}"))
+            .unwrap_or_default();
+        anyhow::bail!(
+            "Windows localhost port {port} is already in use{owner}. Free the port in Windows or choose another with --port-forward."
+        );
+    }
     ensure!(
         output.status.success(),
         "Windows export failed; check access to your Windows LocalAppData directory and its private file permissions"

@@ -23,7 +23,13 @@ use std::path::PathBuf;
 use std::process::Command;
 
 mod access;
+mod port;
 mod windows;
+
+pub enum PortConflictPolicy {
+    Report,
+    TakeOver,
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, ValueEnum)]
 #[serde(rename_all = "lowercase")]
@@ -250,6 +256,7 @@ impl Store {
         source: Option<Source>,
         port: Option<u16>,
         access: Access,
+        policy: PortConflictPolicy,
     ) -> Result<Client> {
         let directory = self.directory(name)?;
         let _lock = self.lock(&directory)?;
@@ -301,16 +308,40 @@ impl Store {
         for role in access.roles() {
             fetch_certificate(&profile.source, *role, &ca, stage.path())?;
         }
-        let forwarding = access::connect(&directory, &profile)?;
         let staged = Client {
             profile: profile.clone(),
             directory: stage.path().to_owned(),
         };
+        if matches!(profile.source, Source::Local) {
+            for role in access.roles() {
+                staged.verify(*role, profile.port())?;
+            }
+        }
+        let source_arg = match &profile.source {
+            Source::Local => "--local".to_owned(),
+            Source::Ssh { destination } => format!("--ssh '{destination}'"),
+        };
+        let role_arg = match access {
+            Access::App => "",
+            Access::Admin => " --role admin",
+            Access::Both => " --role both",
+        };
+        let executable = std::env::args_os()
+            .next()
+            .unwrap_or_else(|| "goblinctl".into());
+        let executable = executable.to_string_lossy();
+        let executable = if executable
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"./_-".contains(&byte))
+        {
+            executable.into_owned()
+        } else {
+            format!("'{}'", executable.replace('\'', "'\\''"))
+        };
+        let retry = format!("{executable} db connect {name} {source_arg}{role_arg}");
+        let forwarding = access::connect(&directory, &profile, policy, &retry)?;
         for role in access.roles() {
-            staged.verify(*role, profile.port())?;
-            if matches!(profile.source, Source::Local)
-                && let Some(port) = profile.forward_port
-            {
+            if let Some(port) = profile.forward_port {
                 staged.verify(*role, port)?;
             }
         }
@@ -338,6 +369,11 @@ impl Store {
             0o600,
         )?;
         forwarding.commit();
+        if let Source::Local = profile.source
+            && let Some(port) = profile.forward_port
+        {
+            println!("Forwarding localhost:{port} to localhost:5432. PostgreSQL TLS check passed.");
+        }
         let client = Client { profile, directory };
         if access
             .roles()
@@ -368,7 +404,7 @@ impl Store {
         Ok(client)
     }
     pub fn export_windows(&self, name: &str, role: Role) -> Result<()> {
-        let client = self.connect(name, None, None, role.into())?;
+        let client = self.connect(name, None, None, role.into(), PortConflictPolicy::Report)?;
         let _lock = self.lock(&client.directory)?;
         let mut profile = self.read(&client.directory)?;
         // Re-read the endpoint under the lock: a concurrent connect may have changed the port.

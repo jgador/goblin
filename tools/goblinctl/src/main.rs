@@ -16,6 +16,7 @@ use goblinctl::k3s::K3s;
 use goblinctl::k3s::{self};
 use goblinctl::operations;
 use goblinctl::postgres::Access;
+use goblinctl::postgres::PortConflictPolicy;
 use goblinctl::postgres::Role;
 use goblinctl::postgres::Source;
 use goblinctl::postgres::Store;
@@ -169,8 +170,12 @@ enum DbCommand {
         local: bool,
         #[arg(long)]
         ssh: Option<String>,
+        /// Listen on this local port and save it in the profile.
         #[arg(long, value_parser = clap::value_parser!(u16).range(1024..))]
-        forward_port: Option<u16>,
+        port_forward: Option<u16>,
+        /// Stop the local listener occupying the port set by --port-forward.
+        #[arg(long, requires = "port_forward")]
+        force: bool,
         #[arg(long, value_enum, default_value = "app")]
         role: Access,
     },
@@ -582,7 +587,8 @@ fn database_action(command: DbCommand) -> Result<()> {
             profile,
             local,
             ssh,
-            forward_port,
+            port_forward,
+            force,
             role,
         } => {
             let source = if local {
@@ -590,11 +596,16 @@ fn database_action(command: DbCommand) -> Result<()> {
             } else {
                 ssh.map(|destination| Source::Ssh { destination })
             };
-            Store::user()?.connect(&profile, source, forward_port, role)?;
+            let policy = if force {
+                PortConflictPolicy::TakeOver
+            } else {
+                PortConflictPolicy::Report
+            };
+            Store::user()?.connect(&profile, source, port_forward, role, policy)?;
             Ok(())
         }
         DbCommand::Refresh { profile, role } => {
-            Store::user()?.connect(&profile, None, None, role)?;
+            Store::user()?.connect(&profile, None, None, role, PortConflictPolicy::Report)?;
             Ok(())
         }
         DbCommand::Export {
@@ -609,7 +620,8 @@ fn database_action(command: DbCommand) -> Result<()> {
             usage,
             command,
         } => {
-            let client = Store::user()?.connect(&profile, None, None, role)?;
+            let client =
+                Store::user()?.connect(&profile, None, None, role, PortConflictPolicy::Report)?;
             let mut child = Command::new(&command[0]);
             child.args(&command[1..]);
             match usage {

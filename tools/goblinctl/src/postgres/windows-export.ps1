@@ -3,6 +3,16 @@ $ErrorActionPreference = 'Stop'
 try {
     $inputData = [Console]::In.ReadToEnd() | ConvertFrom-Json
     if ($inputData.profile -notmatch '^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,47}$' -or $inputData.role -notin @('app', 'admin')) { throw 'Invalid export' }
+    $listeners = Get-NetTCPConnection -State Listen -LocalPort $inputData.port -ErrorAction SilentlyContinue
+    foreach ($listener in $listeners) {
+        if ($listener.LocalAddress -notin @('127.0.0.1', '0.0.0.0', '::1', '::', '::ffff:127.0.0.1')) { continue }
+        $owner = Get-Process -Id $listener.OwningProcess -ErrorAction SilentlyContinue
+        # WSL's localhost relay is the expected listener on Windows.
+        if ($owner.ProcessName -notin @('wslrelay', 'wslhost')) {
+            [Console]::Out.WriteLine($listener.OwningProcess)
+            exit 3
+        }
+    }
     $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
     function Assert-Path($path) {
         $current = $path

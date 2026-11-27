@@ -1,7 +1,8 @@
 import test from "node:test";
 import { createServer } from "node:net";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import {
     mkdir,
     mkdtemp,
@@ -166,6 +167,7 @@ if (name === 'k3s') {
     }
 } else if(name==='powershell.exe') {
     if(state.windowsUnavailable) process.exit(1);
+    if(state.windowsPortOccupied) { process.stdout.write('1234'); process.exit(3); }
     const payload=JSON.parse(fs.readFileSync(0,'utf8'));
     save('windows-payload.json',payload);
     fs.appendFileSync(file('windows-exports'),'1');
@@ -186,22 +188,25 @@ if (name === 'k3s') {
         "capture",
     ])
         await writeFile(join(bin, name), script, { mode: 0o700 });
+    const commandOptions = {
+        cwd: root,
+        env: {
+            ...process.env,
+            [Env.SUDO_UID.name]: "",
+            [Env.SUDO_GID.name]: "",
+            [Env.HOME.name]: root,
+            [Env.XDG_CONFIG_HOME.name]: join(root, configDirectory),
+            [Env.PATH.name]: `${bin}:${process.env[Env.PATH.name]}`,
+            [Env.GOBLIN_POSTGRES_SETUP_TEST.name]: root,
+        },
+        encoding: "utf8" as const,
+        stdio: "pipe" as const,
+        timeout: 20_000,
+    };
     const run = (...args: string[]) =>
-        execFileSync(goblinctl, ["db", ...args], {
-            cwd: root,
-            env: {
-                ...process.env,
-                [Env.SUDO_UID.name]: "",
-                [Env.SUDO_GID.name]: "",
-                [Env.HOME.name]: root,
-                [Env.XDG_CONFIG_HOME.name]: join(root, configDirectory),
-                [Env.PATH.name]: `${bin}:${process.env[Env.PATH.name]}`,
-                [Env.GOBLIN_POSTGRES_SETUP_TEST.name]: root,
-            },
-            encoding: "utf8",
-            stdio: ["ignore", "pipe", "pipe"],
-            timeout: 20_000,
-        });
+        execFileSync(goblinctl, ["db", ...args], commandOptions);
+    const capture = (...args: string[]) =>
+        spawnSync(goblinctl, ["db", ...args], commandOptions);
     const change = async (updates: object) => {
         const path = join(root, "state.json");
         await writeFile(
@@ -219,12 +224,12 @@ if (name === 'k3s') {
             .trim()
             .split("\n")
             .map((l) => JSON.parse(l));
-    return { root, run, change, profile, calls, ports };
+    return { root, run, capture, change, profile, calls, ports };
 }
 
 test("profiles work outside the checkout, verify both local ports, and preserve their port across renewal", async (t) => {
     const f = await fixture(t);
-    f.run("connect", "wsl", "--local", "--forward-port", String(f.ports[0]));
+    f.run("connect", "wsl", "--local", "--port-forward", String(f.ports[0]));
     const saved = JSON.parse(
         await readFile(join(f.profile(), "profile.json"), "utf8"),
     );
@@ -306,7 +311,7 @@ test("a failed forwarded login cleans up first connections and restores a prior 
             "connect",
             "wsl",
             "--local",
-            "--forward-port",
+            "--port-forward",
             String(f.ports[0]),
         ),
     );
@@ -317,10 +322,10 @@ test("a failed forwarded login cleans up first connections and restores a prior 
     await assert.rejects(stat(join(f.profile(), "profile.json")));
     f.run("disconnect", "wsl");
     await f.change({ failLoginPort: 0 });
-    f.run("connect", "wsl", "--local", "--forward-port", String(f.ports[0]));
+    f.run("connect", "wsl", "--local", "--port-forward", String(f.ports[0]));
     await f.change({ failLoginPort: f.ports[2] });
     assert.throws(() =>
-        f.run("connect", "wsl", "--forward-port", String(f.ports[2])),
+        f.run("connect", "wsl", "--port-forward", String(f.ports[2])),
     );
     assert.equal(
         JSON.parse(await readFile(join(f.profile(), "profile.json"), "utf8"))
@@ -335,13 +340,13 @@ test("a failed forwarded login cleans up first connections and restores a prior 
 
 test("WSL and Azure profiles coexist, SSH tunnels are reused, and Windows exports stay explicit", async (t) => {
     const f = await fixture(t, "long-user-config-directory-".repeat(8));
-    f.run("connect", "wsl", "--local", "--forward-port", String(f.ports[0]));
+    f.run("connect", "wsl", "--local", "--port-forward", String(f.ports[0]));
     f.run(
         "connect",
         "azure-dev",
         "--ssh",
         "developer@azure.example",
-        "--forward-port",
+        "--port-forward",
         String(f.ports[1]),
     );
     f.run("connect", "azure-dev");
@@ -366,6 +371,14 @@ test("WSL and Azure profiles coexist, SSH tunnels are reused, and Windows export
     assert.equal(payload.role, "app");
     assert.equal(payload.profile, "wsl");
     assert.equal(await readFile(join(f.root, "windows-exports"), "utf8"), "1");
+    await f.change({ windowsPortOccupied: true });
+    assert.match(
+        f.capture("export", "wsl", "--client", "windows").stderr,
+        new RegExp(
+            `Windows localhost port ${f.ports[0]} is already in use by PID 1234`,
+        ),
+    );
+    await f.change({ windowsPortOccupied: false });
     await f.change({ windowsUnavailable: true });
     f.run("refresh", "wsl");
     assert.throws(() => f.run("export", "wsl", "--client", "windows"));
@@ -443,16 +456,36 @@ test("profile paths reject traversal and symlinks without writing credentials", 
 
 test("occupied forwarding ports preserve the old listener and incomplete generations are recoverable", async (t) => {
     const f = await fixture(t);
-    f.run("connect", "wsl", "--local", "--forward-port", String(f.ports[0]));
+    f.run("connect", "wsl", "--local", "--port-forward", String(f.ports[0]));
     const server = createServer();
     await new Promise<void>((resolve) =>
         server.listen(f.ports[2], "127.0.0.1", resolve),
     );
     try {
-        assert.throws(
-            () => f.run("connect", "wsl", "--forward-port", String(f.ports[2])),
-            /occupied/,
+        const port = String(f.ports[2]);
+        const result = f.capture("connect", "wsl", "--port-forward", port);
+        assert.equal(result.status, 1);
+        assert.match(result.stderr, /already in use/);
+        assert.ok(result.stderr.includes(`PID ${process.pid}`));
+        assert.ok(result.stderr.includes(goblinctl.replaceAll("'", "'\\''")));
+        assert.ok(
+            result.stderr.includes(
+                `db connect wsl --local --port-forward ${port} --force`,
+            ),
         );
+        const forced = f.capture(
+            "connect",
+            "wsl",
+            "--port-forward",
+            port,
+            "--force",
+        );
+        assert.equal(forced.status, 1);
+        assert.match(
+            forced.stderr,
+            /The listener belongs to Goblin's own session/,
+        );
+        assert.ok(server.listening);
     } finally {
         await new Promise<void>((resolve, reject) =>
             server.close((error) => (error ? reject(error) : resolve())),
@@ -468,6 +501,60 @@ test("occupied forwarding ports preserve the old listener and incomplete generat
             .forward_port,
         f.ports[0],
     );
+});
+
+test("db connect force is scoped to an explicit port and takes over a disposable listener", async (t) => {
+    const f = await fixture(t);
+    const missingPort = f.capture("connect", "wsl", "--local", "--force");
+    assert.equal(missingPort.status, 2);
+    assert.match(missingPort.stderr, /--port-forward/);
+    for (const args of [
+        ["refresh", "wsl"],
+        ["export", "wsl", "--client", "windows"],
+    ]) {
+        const otherCommand = f.capture(...args, "--force");
+        assert.equal(otherCommand.status, 2);
+        assert.match(otherCommand.stderr, /unexpected argument '--force'/);
+    }
+
+    const listener = spawn(
+        process.execPath,
+        [
+            "-e",
+            "require('node:net').createServer().listen(0, '127.0.0.1', function () { console.log(this.address().port); });",
+        ],
+        { stdio: ["ignore", "pipe", "inherit"] },
+    );
+    t.after(() => listener.kill());
+    const exit = once(listener, "exit");
+    const [data] = await once(listener.stdout, "data");
+    const port = String(data).trim();
+    const args = [
+        "connect",
+        "wsl",
+        "--local",
+        "--port-forward",
+        port,
+        "--force",
+    ];
+    await f.change({ failLogin: true });
+    const unavailable = f.capture(...args);
+    assert.equal(unavailable.status, 1);
+    assert.doesNotMatch(unavailable.stderr, /Stopping /);
+    await f.change({ failLogin: false });
+    const forced = f.capture(...args);
+    assert.equal(forced.status, 0, forced.stderr);
+    assert.match(
+        forced.stderr,
+        new RegExp(`Stopping .*PID ${listener.pid}.* port ${port}`),
+    );
+    assert.match(forced.stdout, /PostgreSQL TLS check passed/);
+    assert.deepEqual(await exit, [null, "SIGTERM"]);
+    const saved = JSON.parse(
+        await readFile(join(f.profile(), "profile.json"), "utf8"),
+    );
+    assert.equal(saved.forward_port, Number(port));
+    assert.ok(!("force" in saved));
 });
 
 test(

@@ -10,8 +10,8 @@ inside WSL** and run these commands from the repository root.
 
 ```bash
 cargo build --locked -p goblinctl
-apt install -y postgresql-client openssl openssh-client
-./target/debug/goblinctl db connect wsl --local --forward-port 55432
+apt install -y postgresql-client openssl openssh-client iproute2
+./target/debug/goblinctl db connect wsl --local --port-forward 55432
 ./target/debug/goblinctl db export wsl --client windows --role app
 ```
 
@@ -25,9 +25,10 @@ The export prints the full Windows paths for both files. For the `wsl` profile a
 3. Open **Goblin → Goblin - wsl (app)**. No database password is needed.
 
 WSL reaches PostgreSQL at `localhost:5432`. Windows uses `localhost:55432` through WSL
-localhost forwarding. Keep WSL running. Choose a forwarding port from 1024 to 65535
-that is free in both WSL and Windows. The profile saves the forwarding port. Export
-checks the database identity and TLS login before writing the Windows files.
+localhost forwarding. Keep WSL running. The profile saves the forwarding port, which
+can be any port from 1024 to 65535 except the reserved database port 5432.
+Connect checks for WSL port conflicts, and export checks for Windows port conflicts.
+Export also verifies the database identity and TLS login before writing the Windows files.
 
 ### Reconnect or refresh
 
@@ -50,15 +51,25 @@ After intentionally recreating k3s, choose an unused profile name such as `wsl-w
 Run these commands from the repository root in a root WSL shell.
 
 ```bash
-./target/debug/goblinctl db connect wsl-windows --local --forward-port 55432
+./target/debug/goblinctl db connect wsl-windows --local --port-forward 55432
 ./target/debug/goblinctl db export wsl-windows --client windows --role app
 ```
 
-If port 55432 is in use, choose a free port when connecting. Import the printed
-`wsl-windows\app\pgAdmin.json` path and use the new profile name in future exports.
+Import the printed `wsl-windows\app\pgAdmin.json` path and use the new profile name
+in future exports.
 
 ### Troubleshooting and other clients
 
+- **WSL port is in use.** Connect reports the listener when it can identify it. To
+  stop that listener and take over its port, rerun the command with `--force` and
+  an explicit port. This applies to the current `db connect` invocation.
+
+  ```bash
+  ./target/debug/goblinctl db connect wsl --local --port-forward 55432 --force
+  ```
+
+- **Windows port is in use.** Free it in Windows or connect with a different
+  `--port-forward` value, export again, and update the port in pgAdmin.
 - **Windows export failed.** Rebuild with `cargo build --locked -p goblinctl` and run
   the export with `./target/debug/goblinctl` from the repository root. Check that WSL
   can launch Windows PowerShell and that your Windows account can write to the export
@@ -104,7 +115,7 @@ With the CLI and packages from [the WSL setup](#wsl-and-windows-pgadmin), run th
 commands from the repository root in WSL with your SSH destination.
 
 ```bash
-./target/debug/goblinctl db connect azure-dev --ssh developer@your-azure-vm --forward-port 55433
+./target/debug/goblinctl db connect azure-dev --ssh developer@your-azure-vm --port-forward 55433
 ./target/debug/goblinctl db export azure-dev --client windows --role app
 ```
 
@@ -116,7 +127,7 @@ exports, use `azure-dev` in the [refresh command](#reconnect-or-refresh).
 ## Profile management and storage
 
 Use `goblinctl db --help` for commands. Connect/refresh preserve the saved port; change
-it with `connect --forward-port PORT`. Disconnect stops only this profile's forwarder,
+it with `connect --port-forward PORT`. Disconnect stops only this profile's forwarder,
 preserving settings and credentials. It does not stop the installation's loopback
 endpoint. Linux refresh does not update Windows exports.
 
