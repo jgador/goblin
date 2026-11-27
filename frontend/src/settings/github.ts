@@ -25,6 +25,9 @@ export function mountGitHub(root: HTMLElement) {
         busyAction = "",
         error = "",
         page = 1;
+    let signIn:
+        | { userCode: string; opener: HTMLIFrameElement; tab?: Window }
+        | undefined;
     let enabled: GitRepositoryInfo[] = [],
         available: GitRepositoryInfo[] = [],
         browsing = false,
@@ -50,7 +53,7 @@ export function mountGitHub(root: HTMLElement) {
               !state
                   ? '<p class="settings-description" role="status">Loading GitHub settings…</p>'
                   : state.status === GitHubConnectionStatus.Connecting
-                    ? `<p>Authorize GitHub CLI using this one-time code.</p>${state.userCode ? `<div class="settings-code"><code>${e(state.userCode)}</code><button data-github="copy">Copy code</button></div><a class="settings-primary" href="https://github.com/login/device" target="_blank" rel="noopener noreferrer">Open GitHub sign-in ↗</a>` : `<p role="status">Getting your sign-in code…</p>`}<p class="settings-description">Waiting for you to finish signing in. You can leave this page and return.</p><button data-github="cancel">Cancel sign-in</button>`
+                    ? `<p>Authorize GitHub CLI using this one-time code.</p>${state.userCode ? `<div class="settings-code"><code>${e(state.userCode)}</code><button data-github="copy">Copy code</button></div><a class="settings-primary" data-github-sign-in href="https://github.com/login/device" target="_blank" rel="noopener noreferrer">Open GitHub sign-in ↗</a>` : `<p role="status">Getting your sign-in code…</p>`}<p class="settings-description">Waiting for you to finish signing in. You can leave this page and return.</p><button data-github="cancel">Cancel sign-in</button>`
                     : state?.login
                       ? `<div class="settings-actions"><button data-github="check">Check connection</button><button data-github="disconnect">Disconnect GitHub</button></div><p class="settings-description">Disconnect removes Goblin’s saved access. You can revoke the GitHub CLI authorization from GitHub’s application settings.</p>
           <div class="settings-github-repositories"><h4>Enabled repositories</h4><p class="settings-description">Work inherits access to its assigned branch. Merging stays with you.</p>${
@@ -101,6 +104,57 @@ export function mountGitHub(root: HTMLElement) {
             replacement?.focus({ preventScroll: true });
         }
     }
+    function clearSignIn() {
+        signIn?.opener.remove();
+        signIn = undefined;
+    }
+    function openSignIn(link: HTMLAnchorElement, event: MouseEvent) {
+        if (
+            !signIn ||
+            event.defaultPrevented ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.shiftKey ||
+            event.altKey
+        )
+            return;
+        if (signIn.tab && !signIn.tab.closed) {
+            event.preventDefault();
+            signIn.tab.focus();
+            return;
+        }
+        const tab = signIn.opener.contentWindow?.open(link.href, "_blank");
+        if (!tab) return;
+        event.preventDefault();
+        signIn.tab = tab;
+    }
+    function updateState(next: GitHubState) {
+        if (
+            next.status === GitHubConnectionStatus.Connecting &&
+            next.userCode
+        ) {
+            if (next.userCode !== signIn?.userCode) {
+                clearSignIn();
+                // The scriptless frame isolates the opener from GitHub. Attach
+                // it before the click so Edge grants it the user's activation.
+                const opener = document.createElement("iframe");
+                opener.hidden = true;
+                opener.title = "GitHub sign-in";
+                opener.sandbox.add(
+                    "allow-same-origin",
+                    "allow-popups",
+                    "allow-popups-to-escape-sandbox",
+                );
+                document.body.append(opener);
+                signIn = { userCode: next.userCode, opener };
+            }
+        } else {
+            if (next.status === GitHubConnectionStatus.Connected)
+                signIn?.tab?.close();
+            clearSignIn();
+        }
+        state = next;
+    }
     async function refresh() {
         if (disposed || busy || refreshing) return;
         refreshing = true;
@@ -109,7 +163,7 @@ export function mountGitHub(root: HTMLElement) {
             const next = await api<GitHubState>("/api/github");
             if (version !== generation || busy) return;
             const changed = JSON.stringify(next) !== JSON.stringify(state);
-            state = next;
+            updateState(next);
             if (changed) {
                 error = "";
                 render();
@@ -141,6 +195,13 @@ export function mountGitHub(root: HTMLElement) {
         "click",
         async (event) => {
             if (!(event.target instanceof Element) || disposed) return;
+            const signInLink = event.target.closest<HTMLAnchorElement>(
+                "[data-github-sign-in]",
+            );
+            if (signInLink) {
+                openSignIn(signInLink, event);
+                return;
+            }
             const button = event.target.closest<HTMLButtonElement>(
                 "button[data-github]",
             );
@@ -182,7 +243,9 @@ export function mountGitHub(root: HTMLElement) {
                         },
                     );
                 } else {
-                    state = await api<GitHubState>(`/api/github/${action}`, {});
+                    updateState(
+                        await api<GitHubState>(`/api/github/${action}`, {}),
+                    );
                     await loadEnabled();
                 }
                 if (!disposed)
@@ -204,10 +267,12 @@ export function mountGitHub(root: HTMLElement) {
     render();
     void Promise.all([refresh(), loadEnabled()]).then(render);
     const timer = setInterval(() => {
-        if (!document.hidden && !busy) void refresh();
+        if (signIn?.tab?.closed) signIn.tab = undefined;
+        if (!document.hidden || signIn?.tab) void refresh();
     }, 2000);
     return () => {
         disposed = true;
+        clearSignIn();
         generation++;
         controller.abort();
         clearInterval(timer);

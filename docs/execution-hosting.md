@@ -110,9 +110,10 @@ to workers.
 Capacity settings are in
 [workspace lifecycle](workspace-lifecycle.md#capacity-and-retention).
 
-GitHub sign-in uses the bundled, checksum-pinned `gh` CLI. Open **Settings → GitHub →
-Connect GitHub**, copy the device code, and authorize **GitHub CLI** on GitHub. No
-custom OAuth app or copied token is needed. `gh` requests its standard scopes; the
+GitHub sign-in uses the bundled, checksum-pinned `gh` CLI. Open **Settings → Connections →
+GitHub → Connect GitHub**, copy the device code, and authorize **GitHub CLI** on GitHub.
+Keep Settings open so Goblin can close the sign-in tab when it confirms the connection.
+No custom OAuth app or copied token is needed. `gh` requests its standard scopes; the
 broker, not the token, limits Goblin to enabled repositories. The CLI profile is a mode
 0600 file in `github-cli/` under the data directory. Host `GH_TOKEN`, `GITHUB_TOKEN`,
 and CLI configuration are not inherited. Disconnect removes the saved profile; revoke

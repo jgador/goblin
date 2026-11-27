@@ -253,6 +253,67 @@ test("an unconfigured tool explains its availability while the other tool stays 
     await popup.close();
 });
 
+test("GitHub closes the isolated sign-in tab after authorization in the foreground", async ({
+    page,
+    context,
+}) => {
+    const { github } = await settingsFixture(page);
+    await context.route("https://github.com/login/device", (route) =>
+        route.fulfill({
+            contentType: "text/html",
+            body: '<a href="/login/device/success">Authorize</a>',
+        }),
+    );
+    await context.route("https://github.com/login/device/success", (route) =>
+        route.fulfill({
+            contentType: "text/html",
+            body: "<h1>Device connected</h1>",
+        }),
+    );
+    const settingsUrl = "/settings?section=connections&provider=github";
+    await page.goto(settingsUrl);
+    await page.getByRole("button", { name: "Connect GitHub" }).click();
+    const openerFrame = page.locator('iframe[title="GitHub sign-in"]');
+    await expect(openerFrame).toBeAttached();
+    const opened = context.waitForEvent("page");
+    await page
+        .getByRole("link", { name: "Open GitHub sign-in" })
+        .press("Enter");
+    const tab = await opened;
+    await expect(tab).toHaveURL("https://github.com/login/device");
+    expect(await tab.evaluate(() => document.referrer)).toBe("");
+    await tab.getByRole("link", { name: "Authorize" }).click();
+    await expect(
+        tab.getByRole("heading", { name: "Device connected" }),
+    ).toBeVisible();
+    expect(
+        await tab.evaluate(() => {
+            const opener = window.opener;
+            if (!opener || opener === opener.top) return false;
+            try {
+                opener.top.location = location.href;
+                return false;
+            } catch (error) {
+                return (
+                    error instanceof DOMException &&
+                    error.name === "SecurityError"
+                );
+            }
+        }),
+    ).toBe(true);
+    await page.evaluate(() =>
+        Object.defineProperty(document, "hidden", { value: true }),
+    );
+
+    github.status = "Connected";
+    github.login = "owner";
+    github.userCode = null;
+    await expect.poll(() => tab.isClosed()).toBe(true);
+    await expect(openerFrame).toHaveCount(0);
+    await expect(page).toHaveURL(settingsUrl);
+    await expect(page.getByText("@owner · Connected")).toBeVisible();
+});
+
 test("GitHub sign-in survives refresh and can be cancelled on mobile", async ({
     page,
 }) => {
