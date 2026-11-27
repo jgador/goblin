@@ -67,7 +67,7 @@ export type Attempt = {
 export type Work = {
     id: string;
     title?: string | null;
-    objective: string;
+    description: string;
     status: WorkStatus;
     agentId?: string;
     attention?: { reason: AttentionReason; failure?: FailureKind };

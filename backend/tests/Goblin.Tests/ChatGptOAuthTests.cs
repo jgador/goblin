@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -49,7 +50,7 @@ public sealed class ChatGptOAuthTests
 {
     private sealed class TitleGenerator : IWorkTitleGenerator
     {
-        public Task<string?> GenerateAsync(string objective, CancellationToken cancellationToken) =>
+        public Task<string?> GenerateAsync(string description, CancellationToken cancellationToken) =>
             Task.FromResult<string?>("Review the request");
     }
 
@@ -173,8 +174,8 @@ public sealed class ChatGptOAuthTests
                 Assert.Contains("\"items\":[]", JsonSerializer.Serialize(empty));
                 await database.SeedWorkAsync();
                 CallToolResult listed = await client.CallToolAsync("goblin_list_work");
-                Assert.Contains("Existing objective", JsonSerializer.Serialize(listed));
-                Assert.Contains("Another objective", JsonSerializer.Serialize(listed));
+                Assert.Contains("Existing description", JsonSerializer.Serialize(listed));
+                Assert.Contains("Another description", JsonSerializer.Serialize(listed));
                 Assert.False((await client.CallToolAsync("goblin_get_work", new Dictionary<string, object?> { ["workId"] = "102" })).IsError ?? false);
                 CallToolResult reserved = await client.CallToolAsync("goblin_reserve_work_ids", new Dictionary<string, object?> { ["forCreate"] = true });
                 Assert.False(reserved.IsError ?? false);
@@ -184,17 +185,17 @@ public sealed class ChatGptOAuthTests
                 {
                     ["commandId"] = commandId,
                     ["workId"] = workId,
-                    ["objective"] = "Plugin objective"
+                    ["description"] = "Plugin description"
                 };
                 CallToolResult created = await client.CallToolAsync("goblin_create_work", create);
                 Assert.False(created.IsError ?? false);
                 Assert.Equal("Review the request", created.StructuredContent!.Value.GetProperty("work").GetProperty("title").GetString());
-                Assert.Equal("Plugin objective", created.StructuredContent!.Value.GetProperty("work").GetProperty("objective").GetString());
+                Assert.Equal("Plugin description", created.StructuredContent!.Value.GetProperty("work").GetProperty("description").GetString());
                 CallToolResult repeated = await client.CallToolAsync("goblin_create_work", create);
                 Assert.Equal(created.StructuredContent.Value.GetProperty("work").GetProperty("version").GetInt64(),
                     repeated.StructuredContent!.Value.GetProperty("work").GetProperty("version").GetInt64());
                 using HttpResponseMessage fromGoblin = await owner.GetAsync("/api/work/" + workId);
-                Assert.Equal("Plugin objective", (await DocumentAsync(fromGoblin)).GetProperty("work").GetProperty("objective").GetString());
+                Assert.Equal("Plugin description", (await DocumentAsync(fromGoblin)).GetProperty("work").GetProperty("description").GetString());
                 CallToolResult updateId = await client.CallToolAsync("goblin_reserve_work_ids", new Dictionary<string, object?> { ["forCreate"] = false });
                 string contextId = updateId.StructuredContent!.Value.GetProperty("commandId").GetString()!;
                 long version = created.StructuredContent.Value.GetProperty("work").GetProperty("version").GetInt64();
@@ -257,7 +258,7 @@ public sealed class ChatGptOAuthTests
                             {
                                 name = "goblin_create_work",
                                 arguments = new
-                                { commandId = disconnectedCommandId, workId = disconnectedWorkId, objective = "Accepted despite disconnect" }
+                                { commandId = disconnectedCommandId, workId = disconnectedWorkId, description = "Accepted despite disconnect" }
                             }
                         }), disconnected.Token);
                         await database.WaitForWorkLockAsync(request);
@@ -277,7 +278,7 @@ public sealed class ChatGptOAuthTests
                     }
                     await Task.Delay(50);
                 }
-                Assert.Equal("Accepted despite disconnect", afterDisconnect.GetProperty("work").GetProperty("objective").GetString());
+                Assert.Equal("Accepted despite disconnect", afterDisconnect.GetProperty("work").GetProperty("description").GetString());
             }
             await using (Host restarted = await Host.CreateAsync(database.App, directory))
             {
@@ -318,7 +319,7 @@ public sealed class ChatGptOAuthTests
                     jsonrpc = "2.0",
                     id = 3,
                     method = "tools/call",
-                    @params = new { name = "goblin_create_work", arguments = new { commandId = "999", workId = "998", objective = "Denied" } }
+                    @params = new { name = "goblin_create_work", arguments = new { commandId = "999", workId = "998", description = "Denied" } }
                 }));
                 Assert.Equal(HttpStatusCode.Unauthorized, deniedWrite.StatusCode);
                 using HttpResponseMessage refreshDenied = await exchange.PostAsync("/oauth/token", Refresh(renewedRefresh));
@@ -572,14 +573,18 @@ public sealed class ChatGptOAuthTests
             await using var db = new NpgsqlConnection(App);
             await db.OpenAsync();
             DateTimeOffset now = DateTimeOffset.UtcNow;
-            foreach ((long id, string objective) in new[] { (101L, "Existing objective"), (102L, "Another objective") })
+            foreach ((long id, string description) in new[] { (101L, "Existing description"), (102L, "Another description") })
             {
-                var work = new WorkItem(id, objective, now, "Test work");
+                var work = new WorkItem(id, description, now, "Test work");
                 work.Assign(1, now);
-                await using var command = new NpgsqlCommand("INSERT INTO work_item (id, objective, state, status, agent_id) VALUES (@id, @objective, @state::jsonb, @status, 1)", db);
+                JsonObject state = JsonSerializer.SerializeToNode(work.Snapshot(), ContractJson.Options)!.AsObject();
+                state.Remove("title");
+                state.Remove("description");
+                await using var command = new NpgsqlCommand("INSERT INTO work_item (id, title, description, state, status, agent_id) VALUES (@id, @title, @description, @state::jsonb, @status, 1)", db);
                 command.Parameters.AddWithValue("id", id);
-                command.Parameters.AddWithValue("objective", objective);
-                command.Parameters.AddWithValue("state", JsonSerializer.Serialize(work.Snapshot(), ContractJson.Options));
+                command.Parameters.AddWithValue("title", work.Title!);
+                command.Parameters.AddWithValue("description", description);
+                command.Parameters.AddWithValue("state", state.ToJsonString());
                 command.Parameters.AddWithValue("status", work.Status.ToString());
                 await command.ExecuteNonQueryAsync();
             }

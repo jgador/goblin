@@ -59,7 +59,7 @@ export function renderSearch(workspace: WorkspaceState, search: string) {
     const query = search.trim().toLocaleLowerCase();
     if (!query)
         return {
-            status: "Search saved objectives, results, and messages.",
+            status: "Search saved descriptions, results, and messages.",
             results: "",
         };
     const work = matchingWork(workspace, query);
@@ -290,7 +290,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
             (kind === "new" && !canCreate);
         const send = `<button class="send" type="submit" ${blocked ? 'data-blocked="true"' : ""} ${blocked || !draft.trim() ? "disabled" : ""}>${sendLabel}${icon(prompt && kind === "new" ? "plus" : "up")}</button>`;
         if (prompt)
-            return `<div class="composer-wrap"><form class="composer prompt-composer" data-form="${kind}">${input}<div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionMenu() : ""}</div>${send}</div></form><p id="composer-help" class="composer-hint">${kind === "new" ? "Codex writes a title for your goal. Start execution from the Ready item." : "Save messages in this conversation. Choose Track this work to turn it into a Work item."}</p></div>`;
+            return `<div class="composer-wrap"><form class="composer prompt-composer" data-form="${kind}">${input}<div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionMenu() : ""}</div>${send}</div></form><p id="composer-help" class="composer-hint">${kind === "new" ? "Codex writes a title from your description. Start execution from the Ready item." : "Save messages in this conversation. Choose Track this work to turn it into a Work item."}</p></div>`;
         const workTools = `${work && (work.results.length || work.artifacts.length) ? `<button class="composer-chip" type="button" data-action="view-outputs" aria-controls="work-outputs">${icon("file")}Outputs</button>` : ""}${changing ? `<button class="composer-chip" type="button" data-action="changes" ${submission.sending ? "disabled" : ""}>${icon("close")}Cancel change request</button>` : ""}${help ? `<p id="composer-help" class="composer-hint">${help}</p>` : ""}`;
         return `<div class="composer-wrap"><form class="composer" data-form="work">${input}<div class="composer-footer"><div class="composer-footer-start">${workTools}</div>${send}</div></form></div>`;
     }
@@ -460,7 +460,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         ${w.decisions.length ? `<section class="work-section" aria-labelledby="decisions-heading"><div class="section-content"><div class="section-heading"><h3 id="decisions-heading">Decisions</h3><span class="section-count">${w.decisions.length}</span></div>${renderDecisions(w)}</div></section>` : ""}
         <section class="work-section progress-section" aria-labelledby="progress-heading"><div class="section-content"><div class="section-heading"><h3 id="progress-heading">Progress</h3></div>${renderProgress(item)}</div></section>
         ${w.attempts.length ? `<section class="work-section executions-section" aria-labelledby="executions-heading"><div class="section-content"><div class="section-heading"><h3 id="executions-heading">Executions</h3><span class="section-count">${w.attempts.length}</span></div>${renderExecutions(w)}</div></section>` : ""}
-        <section class="work-section work-info" aria-labelledby="work-info-heading"><div class="section-content"><div class="section-heading"><h3 id="work-info-heading">Details</h3></div><dl class="work-properties"><dt>Created</dt><dd>${e(time(item.createdAt))}</dd><dt><button class="text-button" data-action="settings-agents">Agent ${icon("arrow")}</button></dt><dd>${e(workAgent(w)?.name ?? "Goblin")}</dd>${attempt?.target.repository ? `<dt>Repository</dt><dd class="preserve-lines">${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? `<span class="repository-branch">${icon("branch")}${e(attempt.target.repository.grant.branch)}</span>` : ""}</dd>` : ""}</dl><div class="work-info-actions"><button class="text-button" data-action="discuss-goal">${icon("chat")}Discuss goal</button><button class="text-button" data-action="settings-github">${icon("github")}GitHub</button></div>${review ? cancelWork(w) : ""}</div></section>
+        <section class="work-section work-info" aria-labelledby="work-info-heading"><div class="section-content"><div class="section-heading"><h3 id="work-info-heading">Details</h3></div><dl class="work-properties"><dt>Created</dt><dd>${e(time(item.createdAt))}</dd><dt><button class="text-button" data-action="settings-agents">Agent ${icon("arrow")}</button></dt><dd>${e(workAgent(w)?.name ?? "Goblin")}</dd>${attempt?.target.repository ? `<dt>Repository</dt><dd class="preserve-lines">${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? `<span class="repository-branch">${icon("branch")}${e(attempt.target.repository.grant.branch)}</span>` : ""}</dd>` : ""}</dl><div class="work-info-actions"><button class="text-button" data-action="clarify-request">${icon("chat")}Clarify request</button><button class="text-button" data-action="settings-github">${icon("github")}GitHub</button></div>${review ? cancelWork(w) : ""}</div></section>
         </div></details>`;
     }
     function renderSelectedWork(item: View) {
@@ -495,9 +495,9 @@ export function renderWorkspace(input: WorkspaceViewInput) {
                 <div class="detail-body work-thread" data-scroll="detail">
                     <div class="work-thread-content">
                         <section id="work-conversation" class="work-conversation" aria-label="Conversation about this Work">
-                            <details id="work-objective" class="work-objective">
-                                <summary>Full objective${icon("chevron", "disclosure-icon")}</summary>
-                                <p class="work-objective-full preserve-lines">${e(w.objective)}</p>
+                            <details id="work-description" class="work-description">
+                                <summary>Description${icon("chevron", "disclosure-icon")}</summary>
+                                <p class="work-description-full preserve-lines">${e(w.description)}</p>
                             </details>
                             ${renderConversation(w, workAgent(w)?.name ?? "Goblin", review, reviewArea)}
                         </section>

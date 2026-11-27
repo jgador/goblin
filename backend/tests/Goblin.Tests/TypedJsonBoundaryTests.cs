@@ -42,13 +42,13 @@ public sealed class TypedJsonBoundaryTests
     {
         DefaultHttpContext context = Request("""
             {"commandId":"9007199254740993","workId":"9007199254740995","action":"Create",
-             "text":"Keep the objective","ignored":{"nested":true}}
+             "text":"Keep the description","ignored":{"nested":true}}
             """);
         context.Items[ApiRequest.BodyKey] = await ApiRequest.ReadBodyAsync(context.Request);
         Api.WorkCommand command = ApiRequest.Body<Api.WorkCommand>(context, ContractJson.Options);
         Assert.Equal(9007199254740993, command.CommandId);
         Assert.Equal(9007199254740995, command.WorkId);
-        Assert.Equal("Keep the objective", command.Text);
+        Assert.Equal("Keep the description", command.Text);
     }
 
     [Theory]

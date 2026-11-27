@@ -42,7 +42,7 @@ public sealed class ChatGptHttpTests
         var view = new WorkView(4, now, now, new WorkSnapshot
         {
             Id = 11,
-            Objective = "Full objective",
+            Description = "Full description",
             Attempts = [],
             History = [],
             Decisions = [],
@@ -224,7 +224,7 @@ public sealed class ChatGptHttpTests
             Assert.Equal("string", properties.GetProperty("commandId").GetProperty("type").GetString());
             Assert.Equal("string", properties.GetProperty("workId").GetProperty("type").GetString());
             if (name == "goblin_create_work")
-                Assert.Equal("string", properties.GetProperty("objective").GetProperty("type").GetString());
+                Assert.Equal("string", properties.GetProperty("description").GetProperty("type").GetString());
             else
                 Assert.Equal("integer", properties.GetProperty("expectedVersion").GetProperty("type").GetString());
         }

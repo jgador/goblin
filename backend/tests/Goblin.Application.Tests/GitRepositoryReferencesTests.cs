@@ -16,9 +16,9 @@ public sealed class GitRepositoryReferencesTests
     [InlineData("Use https://evil.github.com/owner/repo", null)]
     [InlineData("Use https://example.com/owner/repo", null)]
     [InlineData("Use https://github.com.evil/owner/repo", null)]
-    public void OnlyExplicitReferencesSuggestGitRepositories(string objective, string? expected)
+    public void OnlyExplicitReferencesSuggestGitRepositories(string description, string? expected)
     {
-        var work = new WorkItem(1, objective, DateTimeOffset.UtcNow, "Test work");
+        var work = new WorkItem(1, description, DateTimeOffset.UtcNow, "Test work");
         string[] matches = GitRepositoryReferences.Find(work.Snapshot(), ["owner/repo"]);
         Assert.Equal(expected is null ? [] : [expected], matches);
     }

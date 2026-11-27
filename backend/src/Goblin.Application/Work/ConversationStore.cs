@@ -126,7 +126,7 @@ public sealed class ConversationStore
         if (command.ConversationId <= 0 || command.MessageId <= 0 || command.Text?.Length > 4000)
             throw new ApplicationFailure("invalid_command");
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync();
-        string? objective = null;
+        string? description = null;
         string? title = null;
         if (command.WorkId is { } proposedId)
         {
@@ -134,9 +134,9 @@ public sealed class ConversationStore
             bool linked = await db.Conversations.AnyAsync(x => x.Id == command.ConversationId && x.WorkId != null);
             if (!linked)
             {
-                objective = await db.ConversationMessages.Where(x => x.ConversationId == command.ConversationId)
+                description = await db.ConversationMessages.Where(x => x.ConversationId == command.ConversationId)
                     .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).Select(x => x.Body).FirstOrDefaultAsync() ?? command.Text;
-                title = await _work.GenerateTitleAsync(objective, default);
+                title = await _work.GenerateTitleAsync(description, default);
             }
         }
         await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, default);
@@ -159,7 +159,7 @@ public sealed class ConversationStore
             await db.SaveChangesAsync();
             Persistence.Entities.ConversationMessage[] messages = await db.ConversationMessages.Where(x => x.ConversationId == conversation.Id)
                 .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToArrayAsync();
-            if (title is null || messages.FirstOrDefault()?.Body != objective)
+            if (title is null || messages.FirstOrDefault()?.Body != description)
                 throw new ApplicationFailure("work_changed");
             DateTimeOffset now = DateTimeOffset.UtcNow;
             var work = new WorkItem(workId, messages[0].Body, now, title);

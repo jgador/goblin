@@ -59,6 +59,7 @@ internal sealed class StaticAssets
             ("/assets/providers/teams.svg", "assets/providers/teams.svg", "image/svg+xml"),
             ("/work/app.js", "work/app.js", "text/javascript; charset=utf-8"),
             ("/work/changes.js", "work/changes.js", "text/javascript; charset=utf-8"),
+            ("/work/changes-layout.js", "work/changes-layout.js", "text/javascript; charset=utf-8"),
             ("/work/diff.js", "work/diff.js", "text/javascript; charset=utf-8"),
             ("/work/board.js", "work/board.js", "text/javascript; charset=utf-8"),
             ("/work/command-submission.js", "work/command-submission.js", "text/javascript; charset=utf-8"),

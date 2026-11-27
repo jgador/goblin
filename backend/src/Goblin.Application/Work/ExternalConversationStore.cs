@@ -232,11 +232,11 @@ public sealed partial class ExternalConversationStore
             if (candidate is null) return null;
             string? title = null;
             ApplicationFailure? titleFailure = null;
-            if (candidate.State == nameof(ExternalMessageState.Pending) && candidate.Body is { } objective &&
+            if (candidate.State == nameof(ExternalMessageState.Pending) && candidate.Body is { } description &&
                 await AuthorizedAsync(db, installation.Id, candidate.WorkspaceId, candidate.UserId, token) &&
                 !await SourceQuery(db, candidate).AnyAsync(token))
             {
-                try { title = await _work.GenerateTitleAsync(objective, token); }
+                try { title = await _work.GenerateTitleAsync(description, token); }
                 catch (ApplicationFailure failure) { titleFailure = failure; }
             }
             db.ChangeTracker.Clear();

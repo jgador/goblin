@@ -15,7 +15,7 @@ public sealed class GitRepositoryWorkQueryTests
     [Fact]
     public void OwnerProjectionRejectsMissingState()
     {
-        var owner = new GitRepositoryWorkOwner { State = null!, TurnNumber = 3 };
+        var owner = new GitRepositoryWorkOwner { State = null!, Title = "Test work", Description = "Missing state", TurnNumber = 3 };
         Assert.Throws<ArgumentNullException>(() => owner.Snapshot());
     }
 
@@ -32,11 +32,12 @@ public sealed class GitRepositoryWorkQueryTests
 
         Assert.Equal(5, snapshot.Id);
         Assert.Equal(11, snapshot.AgentId);
-        Assert.Equal("Inspect repository", snapshot.Objective);
+        Assert.Equal("Test work", snapshot.Title);
+        Assert.Equal("Inspect repository", snapshot.Description);
     }
 
     [Fact]
-    public void OwnerProjectionUsesOnePostgresQueryWithOnlyAuthorizationState()
+    public void OwnerProjectionUsesOnePostgresQueryWithWorkStateAndItsColumns()
     {
         using var db = new GoblinDbContext(new DbContextOptionsBuilder<GoblinDbContext>()
             .UseNpgsql("Host=localhost;Database=unused;Username=unused").Options);
@@ -45,7 +46,8 @@ public sealed class GitRepositoryWorkQueryTests
 
         Assert.Contains("JOIN", sql);
         Assert.Contains("state", sql);
-        Assert.DoesNotContain("objective", sql);
+        Assert.Contains("title", sql);
+        Assert.Contains("description", sql);
         Assert.DoesNotContain("created_at", sql);
         Assert.Contains("turn_number", sql);
         Assert.DoesNotContain("status", sql);

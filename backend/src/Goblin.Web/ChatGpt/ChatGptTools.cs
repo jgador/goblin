@@ -82,7 +82,7 @@ internal sealed class ChatGptTools
     [McpServerTool(Name = "goblin_get_work", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false,
         UseStructuredContent = true, OutputSchemaType = typeof(ChatGptWorkOverview))]
     [McpMeta("securitySchemes", JsonValue = OAuth)]
-    [Description("Get any Work item's full objective, current status, attention, version, agent, and repository decision. Use version for commands and paged section reads.")]
+    [Description("Get any Work item's full description, current status, attention, version, agent, and repository decision. Use version for commands and paged section reads.")]
     public Task<CallToolResult> GetAsync(string workId, CancellationToken token) =>
         RunAsync(async () =>
         {
@@ -160,7 +160,7 @@ internal sealed class ChatGptTools
     [McpServerTool(Name = "goblin_suggest_work_repositories", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false,
         UseStructuredContent = true, OutputSchemaType = typeof(ChatGptRepositorySuggestions))]
     [McpMeta("securitySchemes", JsonValue = OAuth)]
-    [Description("Find repository names referenced by a Work objective or context. Use a full owner/repository name to resolve ambiguity before preparing repository access.")]
+    [Description("Find repository names referenced by a Work description or context. Use a full owner/repository name to resolve ambiguity before preparing repository access.")]
     public Task<CallToolResult> SuggestRepositoriesAsync(string workId, CancellationToken token) => RunAsync(async () =>
     {
         long id = Id(workId);
@@ -187,9 +187,9 @@ internal sealed class ChatGptTools
     [McpServerTool(Name = "goblin_create_work", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = true,
         UseStructuredContent = true, OutputSchemaType = typeof(ChatGptCommandReply))]
     [McpMeta("securitySchemes", JsonValue = OAuth)]
-    [Description("Create Work with a Codex-generated title and the default agent. Goblin needs a connected Codex account. First reserve both a command ID and a Work ID with goblin_reserve_work_ids(forCreate: true). Reuse the same IDs and objective after a disconnect.")]
-    public Task<CallToolResult> CreateAsync(string commandId, string workId, string objective, CancellationToken token) =>
-        ApplyAsync(new(Id(commandId), Id(workId), WorkAction.Create) { Text = objective }, token);
+    [Description("Create Work with a Codex-generated title and the default agent. Use the user's original request or question as the description. Goblin needs a connected Codex account. First reserve both a command ID and a Work ID with goblin_reserve_work_ids(forCreate: true). Reuse the same IDs and description after a disconnect.")]
+    public Task<CallToolResult> CreateAsync(string commandId, string workId, string description, CancellationToken token) =>
+        ApplyAsync(new(Id(commandId), Id(workId), WorkAction.Create) { Text = description }, token);
 
     [McpServerTool(Name = "goblin_rename_work", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false,
         UseStructuredContent = true, OutputSchemaType = typeof(ChatGptCommandReply))]

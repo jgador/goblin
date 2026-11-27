@@ -57,7 +57,7 @@ async function setup(
                     work: {
                         id: "1",
                         title: "Review the release checklist",
-                        objective: "Review the release checklist",
+                        description: "Review the release checklist",
                         status: waiting ? "NeedsAttention" : "Ready",
                         attention: waiting ? { reason: "InputRequired" } : null,
                         agentId: "1",
@@ -126,7 +126,7 @@ async function setup(
         return route.fulfill({ json: data[path] ?? [] });
     });
     await page.goto("/work?item=1");
-    await expect(page.locator(".work-objective-full")).toHaveText(
+    await expect(page.locator(".work-description-full")).toHaveText(
         "Review the release checklist",
     );
     return commands;

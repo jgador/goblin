@@ -11,7 +11,7 @@ async function home(page: Page) {
     const state = {
         authenticated: true,
         workUnavailable: false,
-        objective: "Existing work",
+        description: "Existing work",
         status: "NeedsAttention",
         connectionName: "Codex",
         availability: "Disconnected",
@@ -37,8 +37,8 @@ async function home(page: Page) {
                     version: "1",
                     work: {
                         id: "1",
-                        title: state.objective,
-                        objective: state.objective,
+                        title: state.description,
+                        description: state.description,
                         status: state.status,
                         attempts: [],
                         history: [],
@@ -466,7 +466,7 @@ test("a delayed Work read cannot restore private content after locking and unloc
                 work: {
                     id: "1",
                     title: "Obsolete session work",
-                    objective: "Obsolete session work",
+                    description: "Obsolete session work",
                     status: "Ready",
                     attempts: [],
                     history: [],
@@ -491,7 +491,7 @@ test("a delayed Work read cannot restore private content after locking and unloc
     ).toBeVisible();
     delay = false;
     state.authenticated = true;
-    state.objective = "Current session work";
+    state.description = "Current session work";
     await page.getByLabel("Goblin password", { exact: true }).fill("a");
     await page
         .getByRole("button", { name: "Open workspace", exact: true })

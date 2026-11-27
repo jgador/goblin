@@ -15,11 +15,11 @@ public sealed partial class DurabilityTests
         await using Fixture fixture = await Fixture.CreateAsync();
         long firstId = NextId();
         long secondId = NextId();
-        await fixture.Apply(WorkCommands.Create(NextId(), firstId, "Pre-existing full objective"));
+        await fixture.Apply(WorkCommands.Create(NextId(), firstId, "Pre-existing full description"));
         WorkStore store = fixture.Host.Services.GetRequiredService<WorkStore>();
         Assert.Equal(firstId, Assert.Single(await store.ListPageAsync(0, 25)).Work.Id);
 
-        await fixture.Apply(WorkCommands.Create(NextId(), secondId, "New full objective"));
+        await fixture.Apply(WorkCommands.Create(NextId(), secondId, "New full description"));
         WorkView[] page = await store.ListPageAsync(0, 1);
         Assert.Equal(firstId, Assert.Single(page).Work.Id);
         Assert.Equal(secondId, Assert.Single(await store.ListPageAsync(firstId, 1)).Work.Id);
@@ -28,9 +28,9 @@ public sealed partial class DurabilityTests
         Assert.Contains(updated.Work.Messages, message => message.Text == "Context from the connection");
         await fixture.RestartAsync();
         WorkView persisted = await fixture.Get(firstId);
-        Assert.Equal("Pre-existing full objective", persisted.Work.Objective);
+        Assert.Equal("Pre-existing full description", persisted.Work.Description);
         Assert.Contains(persisted.Work.Messages, message => message.Text == "Context from the connection");
-        Assert.Equal("New full objective", (await fixture.Get(secondId)).Work.Objective);
+        Assert.Equal("New full description", (await fixture.Get(secondId)).Work.Description);
     }
 
     [DatabaseFact]

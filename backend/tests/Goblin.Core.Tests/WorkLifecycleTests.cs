@@ -17,11 +17,11 @@ public sealed class WorkLifecycleTests
         Assert.Null(WorkTitle.Normalize(" "));
         Assert.Null(WorkTitle.Normalize("One\nTwo"));
         Assert.Null(WorkTitle.Normalize("One\u2028Two"));
-        var work = new WorkItem(1, "Full objective", Now, limit);
+        var work = new WorkItem(1, "Full description", Now, limit);
         Reject(WorkRule.InvalidTitle, () => work.Rename(" ", Now));
         work.Rename("Short title", Now);
         Assert.Equal("Short title", WorkItem.Restore(work.Snapshot()).Title);
-        Assert.Equal("Full objective", work.Objective);
+        Assert.Equal("Full description", work.Description);
     }
 
     private static long _nextId = int.MaxValue;
@@ -66,7 +66,7 @@ public sealed class WorkLifecycleTests
         {
             SchemaVersion = 1,
             Id = snapshot.Id,
-            Objective = snapshot.Objective,
+            Description = snapshot.Description,
             AgentId = snapshot.AgentId,
             Status = snapshot.Status,
             Attention = snapshot.Attention,

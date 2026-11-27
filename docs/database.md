@@ -294,6 +294,8 @@ After recreating the development database, applying the baseline, and deploying 
 changed build, check readiness and repeat these journeys with neutral test data. Keep
 Work PVCs.
 
+- **Work:** create an item, rename its title, and reload the page. In PostgreSQL,
+  check the updated `work_item.title` and original `work_item.description`.
 - **Slack:** connect or relink the installation, link an external identity, submit
   a message in a linked thread, and confirm Work and replies appear once. Reply
   in that thread and confirm it reaches the existing conversation.

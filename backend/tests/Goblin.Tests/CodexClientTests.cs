@@ -190,7 +190,7 @@ public sealed class CodexClientTests
     public async Task WorkAdapterUsesPersistedContextAndKeepsEarlyResultProvenance(string scenario, ObservationKind expected)
     {
         await using Fixture fixture = await Fixture.CreateAsync(scenario);
-        var work = new WorkItem(NextId(), "Answer the durable objective", DateTimeOffset.UtcNow, "Test work");
+        var work = new WorkItem(NextId(), "Why is the build slow?", DateTimeOffset.UtcNow, "Test work");
         work.Assign(NextId(), DateTimeOffset.UtcNow);
         work.AddContext(NextId(), "Retained context", DateTimeOffset.UtcNow);
         work.QueueExecution(NextId(), new("codex", NextId()), DateTimeOffset.UtcNow);
@@ -208,7 +208,10 @@ public sealed class CodexClientTests
         Assert.Contains("\"outputSchema\"", requests);
         using var turnRequest = JsonDocument.Parse(requests.Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .First(line => line.Contains("\"method\":\"turn/start\"", StringComparison.Ordinal)));
-        JsonElement schema = turnRequest.RootElement.GetProperty("params").GetProperty("outputSchema");
+        JsonElement parameters = turnRequest.RootElement.GetProperty("params");
+        using JsonDocument context = JsonDocument.Parse(parameters.GetProperty("input")[0].GetProperty("text").GetString()!);
+        Assert.Equal(work.Description, context.RootElement.GetProperty("Description").GetString());
+        JsonElement schema = parameters.GetProperty("outputSchema");
         foreach (JsonElement required in schema.GetProperty("required").EnumerateArray())
             Assert.True(schema.GetProperty("properties").TryGetProperty(required.GetString()!, out _));
         Assert.Equal("boolean", schema.GetProperty("properties").GetProperty("releaseWorkspace").GetProperty("type").GetString());
@@ -255,17 +258,18 @@ public sealed class CodexClientTests
         Assert.False(File.Exists(Path.Combine(fixture.Workspace.CodexHome, "prompt-requests.jsonl")));
 
         await auth.LoginApiKeyAsync("test-key-for-the-codex-fixture");
-        const string objective = "Review weekly reports\nKeep the original figures.";
-        Assert.Equal("Review weekly reports", await auth.GenerateAsync(objective, default));
+        const string description = "Why is the build slow?\nFocus on the time after compilation.";
+        Assert.Equal("Why is the build slow?", await auth.GenerateAsync(description, default));
         string[] requests = await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "prompt-requests.jsonl"));
         using JsonDocument thread = JsonDocument.Parse(requests.Single(line => line.Contains("\"method\":\"thread/start\"", StringComparison.Ordinal)));
         Assert.True(thread.RootElement.GetProperty("params").GetProperty("ephemeral").GetBoolean());
+        Assert.Contains("informational question", thread.RootElement.GetProperty("params").GetProperty("baseInstructions").GetString());
         using JsonDocument turn = JsonDocument.Parse(requests.Single(line => line.Contains("\"method\":\"turn/start\"", StringComparison.Ordinal)));
         JsonElement parameters = turn.RootElement.GetProperty("params");
         Assert.False(parameters.GetProperty("sandboxPolicy").GetProperty("networkAccess").GetBoolean());
         Assert.Equal("title", parameters.GetProperty("outputSchema").GetProperty("required")[0].GetString());
         using JsonDocument input = JsonDocument.Parse(parameters.GetProperty("input")[0].GetProperty("text").GetString()!);
-        Assert.Equal(objective, input.RootElement.GetProperty("objective").GetString());
+        Assert.Equal(description, input.RootElement.GetProperty("description").GetString());
     }
 
     [Theory]

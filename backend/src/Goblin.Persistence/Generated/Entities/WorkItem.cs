@@ -14,8 +14,11 @@ public partial class WorkItem
     [Column("id")]
     public long Id { get; set; }
 
-    [Column("objective")]
-    public string Objective { get; set; } = null!;
+    [Column("title")]
+    public string Title { get; set; } = null!;
+
+    [Column("description")]
+    public string Description { get; set; } = null!;
 
     [Column("state", TypeName = "jsonb")]
     public string State { get; set; } = null!;

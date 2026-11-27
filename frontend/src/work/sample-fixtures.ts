@@ -3,7 +3,7 @@ export const sampleWork = [
     {
         id: "GB-024",
         title: "Make Goblin easier to set up",
-        objective:
+        description:
             "A first-time user should be able to run Goblin without reading the source.",
         status: "waiting",
         updated: "3m",
@@ -44,7 +44,7 @@ export const sampleWork = [
     {
         id: "GB-023",
         title: "Put together a weekly work digest",
-        objective:
+        description:
             "A short, useful summary of what moved forward, what is blocked, and what needs me.",
         status: "review",
         updated: "18m",
@@ -85,7 +85,7 @@ export const sampleWork = [
     {
         id: "GB-021",
         title: "Find what is slowing down CI",
-        objective:
+        description:
             "Understand the slowest build steps and suggest a small, measurable improvement.",
         status: "working",
         updated: "27m",
@@ -122,7 +122,7 @@ export const sampleWork = [
     {
         id: "GB-020",
         title: "Connect a repository to Goblin",
-        objective:
+        description:
             "Let me give Goblin a repository once, so I do not need to paste its context every time.",
         status: "working",
         updated: "1h",
@@ -158,7 +158,7 @@ export const sampleWork = [
     {
         id: "GB-018",
         title: "Organize the release checklist",
-        objective: "A repeatable checklist for a small Goblin release.",
+        description: "A repeatable checklist for a small Goblin release.",
         status: "done",
         updated: "Yesterday",
         created: "3 days ago",

@@ -98,11 +98,11 @@ public sealed partial class WorkStore
         return view;
     }
 
-    internal async Task<string> GenerateTitleAsync(string? objective, CancellationToken token)
+    internal async Task<string> GenerateTitleAsync(string? description, CancellationToken token)
     {
-        if (string.IsNullOrWhiteSpace(objective)) throw new ApplicationFailure("invalid_command");
+        if (string.IsNullOrWhiteSpace(description)) throw new ApplicationFailure("invalid_command");
         string? title;
-        try { title = await _titles.GenerateAsync(objective, token); }
+        try { title = await _titles.GenerateAsync(description, token); }
         catch (ConnectionFailure)
         {
             token.ThrowIfCancellationRequested();
@@ -141,7 +141,7 @@ public sealed partial class WorkStore
             work = new(command.WorkId, command.Text ?? "", now,
                 title ?? throw new InvalidOperationException("Work creation requires a prepared title."));
             work.Assign(DefaultAgentId, now);
-            row = new() { Id = work.Id, Objective = work.Objective, CreatedAt = now.UtcDateTime, Version = 0 };
+            row = new() { Id = work.Id, CreatedAt = now.UtcDateTime, Version = 0 };
             db.WorkItems.Add(row);
         }
         else

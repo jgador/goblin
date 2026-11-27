@@ -102,10 +102,11 @@ execution decisions stay in the local application. See
 
 ## Conversations, durability, and visibility
 
-A new DM or mention thread uses the connected Codex account to title the Work, then saves
-the conversation and starts execution. If Goblin cannot generate a title, Slack asks the
-user to send the request again. A reply in an existing thread answers the pending input
-question if there is one; otherwise it adds context.
+A new DM or mention thread uses the connected Codex account to title the Work, saves the
+original request or question as its **Description**, and starts execution.
+If Goblin cannot generate a title, Slack asks the user to send the request again.
+A reply in an existing thread answers the pending input question if there is one,
+or adds context.
 Naming an enabled repository can start isolated repository execution. Slack cannot
 enable repositories, approve results, or retry failed Work; ordinary text such as `yes`
 never approves repository access. Messages longer than 4,000 characters, after removing

@@ -6,18 +6,18 @@ namespace Goblin.Integrations.Codex;
 
 internal sealed class CodexWorkContext
 {
-    public CodexWorkContext(string objective, WorkMessage[] messages, WorkDecision[] decisions,
+    public CodexWorkContext(string description, WorkMessage[] messages, WorkDecision[] decisions,
         WorkResult[] results, WorkArtifact[] artifacts)
     {
-        Objective = objective;
+        Description = description;
         Messages = messages;
         Decisions = decisions;
         Results = results;
         Artifacts = artifacts;
     }
 
-    [JsonPropertyName("Objective")]
-    public string Objective { get; init; }
+    [JsonPropertyName("Description")]
+    public string Description { get; init; }
 
     [JsonPropertyName("Messages")]
     public WorkMessage[] Messages { get; init; }

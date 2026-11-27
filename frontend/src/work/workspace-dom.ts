@@ -1,3 +1,4 @@
+import { ChangesLayout } from "./changes-layout.js";
 import type { WorkspaceContext } from "./navigation.js";
 import type { RepositoryDrafts } from "./repository-setup.js";
 
@@ -21,11 +22,13 @@ type RenderOptions = {
 export class WorkspaceDom {
     private renderedContext: WorkspaceContext | undefined;
     private dragging = false;
+    private readonly changesLayout: ChangesLayout;
 
     constructor(
         private readonly root: HTMLElement,
         private readonly repositoryDrafts: RepositoryDrafts,
     ) {
+        this.changesLayout = new ChangesLayout(root);
         root.addEventListener("pointerdown", (event) => {
             if (
                 event.target instanceof HTMLInputElement &&
@@ -235,6 +238,7 @@ export class WorkspaceDom {
             settings?.attach();
             if (changesPanel)
                 root.querySelector("#work-changes-host")!.append(changesPanel);
+            this.changesLayout.attach(changesPanel);
             if (changesPreview)
                 root.querySelector("#work-changes-preview-host")!.append(
                     changesPreview,

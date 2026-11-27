@@ -293,7 +293,7 @@ for await (const line of createInterface({ input: process.stdin })) {
         );
         const title = titleRequest
             ? Array.from(
-                  (JSON.parse(prompt).objective as string)
+                  (JSON.parse(prompt).description as string)
                       .trim()
                       .split(/[\r\n]/)[0]!,
               )

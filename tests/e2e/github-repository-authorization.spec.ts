@@ -6,7 +6,8 @@ test("chat shows enablement and exact Git scope before submitting only the saved
     const commands: Record<string, unknown>[] = [];
     const work = {
         id: "1",
-        objective: "Fix owner/project and open a PR",
+        title: "Fix owner/project and open a PR",
+        description: "Fix owner/project and open a PR",
         agentId: "1",
         status: "NeedsAttention",
         attention: { reason: "RepositoryRequired" },

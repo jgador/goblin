@@ -1118,10 +1118,10 @@ document.addEventListener("click", async (event) => {
         document.getElementById("close-activity")?.focus();
         return;
     }
-    if (action === "discuss-goal") {
+    if (action === "clarify-request") {
         reviewAttempt = undefined;
         if (!drafts.get(navigation.context))
-            drafts.set(navigation.context, "I'd like to clarify the goal: ");
+            drafts.set(navigation.context, "I'd like to clarify my request: ");
         render();
         document.getElementById("reply")?.focus();
         return;

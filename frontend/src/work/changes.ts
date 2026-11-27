@@ -52,7 +52,11 @@ export class WorkChangesPanel {
                     <h2 id="work-changes-title" tabindex="-1">Changes</h2>
                     <div class="work-changes-meta"></div>
                 </div>
-                <button class="icon-button changes-close" type="button" data-action="close-diff" aria-label="Close diff" title="Close diff">${icon("close")}</button>
+                <div class="work-changes-resizer" role="separator" tabindex="0" aria-label="Resize Changes panel" aria-controls="work-changes" aria-orientation="vertical"></div>
+                <div class="work-changes-actions">
+                    <button class="text-button reset-changes-width" type="button">Reset width</button>
+                    <button class="icon-button changes-close" type="button" data-action="close-diff" aria-label="Close diff" title="Close diff">${icon("close")}</button>
+                </div>
             </header>
             <div class="work-changes-toolbar" hidden>
                 <div class="work-changes-modes" role="group" aria-label="Diff view">

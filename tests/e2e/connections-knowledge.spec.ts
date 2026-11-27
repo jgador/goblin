@@ -478,7 +478,7 @@ for (const width of [1440, 390]) {
                         work: {
                             id: "10",
                             title: "Release checklist",
-                            objective: "Release checklist",
+                            description: "Release checklist",
                             status: "Ready",
                             attempts: [],
                             history: [],

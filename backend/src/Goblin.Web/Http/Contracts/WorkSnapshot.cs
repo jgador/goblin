@@ -17,8 +17,8 @@ public sealed class WorkSnapshot
     [JsonPropertyName("id")]
     public long Id { get; init; }
 
-    [JsonPropertyName("objective")]
-    public string Objective { get; init; } = null!;
+    [JsonPropertyName("description")]
+    public string Description { get; init; } = null!;
 
     [JsonPropertyName("title")]
     public string? Title { get; init; }
@@ -64,7 +64,7 @@ public sealed class WorkSnapshot
         {
             SchemaVersion = value.SchemaVersion,
             Id = value.Id,
-            Objective = value.Objective,
+            Description = value.Description,
             Title = value.Title,
             AgentId = value.AgentId,
             Status = value.Status,

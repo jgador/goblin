@@ -4,8 +4,8 @@ namespace Goblin.Application.Work;
 // HTTP requests map every submitted field directly for validation and replay.
 public static class WorkCommands
 {
-    public static WorkCommand Create(long commandId, long workId, string objective) =>
-        new(commandId, workId, WorkAction.Create) { Text = objective };
+    public static WorkCommand Create(long commandId, long workId, string description) =>
+        new(commandId, workId, WorkAction.Create) { Text = description };
 
     public static WorkCommand Answer(long commandId, long workId, long? expectedVersion, long decisionId, string answer) =>
         new(commandId, workId, WorkAction.Answer)

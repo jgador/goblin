@@ -20,7 +20,7 @@ public interface ICodexAuthentication
 public interface IWorkTitleGenerator
 {
     // Null indicates that the runtime account is disconnected.
-    Task<string?> GenerateAsync(string objective, CancellationToken cancellationToken);
+    Task<string?> GenerateAsync(string description, CancellationToken cancellationToken);
 }
 
 public abstract class ConnectionFailure : Exception

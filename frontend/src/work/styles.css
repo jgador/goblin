@@ -633,8 +633,8 @@ kbd { background: #f3f4f5; border-radius: 4px; padding: 1px 5px; font-family: in
     background: var(--canvas);
     overflow-wrap: anywhere;
 }
-.work-objective { padding-bottom: 8px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
-.work-objective > summary {
+.work-description { padding-bottom: 8px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.work-description > summary {
     display: inline-flex;
     align-items: center;
     min-height: 44px;
@@ -643,10 +643,10 @@ kbd { background: #f3f4f5; border-radius: 4px; padding: 1px 5px; font-family: in
     list-style: none;
     font-size: 13px;
 }
-.work-objective > summary::-webkit-details-marker,
+.work-description > summary::-webkit-details-marker,
 .work-reference > summary::-webkit-details-marker { display: none; }
-.work-objective > summary svg { width: 14px; height: 14px; }
-.work-objective-full { margin-top: 7px; font-size: 13px; color: var(--muted); }
+.work-description > summary svg { width: 14px; height: 14px; }
+.work-description-full { margin-top: 7px; font-size: 13px; color: var(--muted); }
 .context-message { min-width: 0; font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
 .context-message .message-name { margin: 0 0 4px; gap: 6px; color: var(--ink); }
 .context-message .message-name img { width: 16px; height: 16px; }
@@ -684,9 +684,14 @@ kbd { background: #f3f4f5; border-radius: 4px; padding: 1px 5px; font-family: in
 .work-support { display: grid; min-width: 0; align-content: start; gap: 24px; }
 .work-support .work-section { margin: 0; padding: 0 0 24px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; box-shadow: none; }
 .work-support .section-heading h3 { font-size: 12px; font-weight: 600; }
+@property --work-changes-width {
+    syntax: "<percentage>";
+    inherits: false;
+    initial-value: 48%;
+}
 .work-review-layout {
     display: grid;
-    grid-template: minmax(0, 1fr) / minmax(0, 1fr) minmax(0, 48%);
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr) minmax(0, var(--work-changes-width, 48%));
 }
 .work-review-layout > .detail { grid-area: 1 / 1; }
 .work-review-layout > #work-changes-host {
@@ -698,6 +703,7 @@ kbd { background: #f3f4f5; border-radius: 4px; padding: 1px 5px; font-family: in
     container-type: inline-size;
 }
 .work-changes {
+    position: relative;
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -706,6 +712,41 @@ kbd { background: #f3f4f5; border-radius: 4px; padding: 1px 5px; font-family: in
     font-size: 13px;
     background: var(--paper);
 }
+.work-changes-resizer {
+    position: absolute;
+    z-index: 1;
+    inset-block: 0;
+    inset-inline-start: -9px;
+    width: 16px;
+    cursor: col-resize;
+    touch-action: pan-y;
+}
+.work-changes-resizer::after {
+    content: "";
+    position: absolute;
+    inset-block-start: calc(50% - 16px);
+    inset-inline-start: calc(50% - 2px);
+    width: 4px;
+    height: 32px;
+    border-radius: 2px;
+    background: var(--control-border);
+}
+.work-review-layout[data-resizing] { cursor: col-resize; user-select: none; }
+.work-review-layout[data-resizing] .work-changes-resizer::after,
+.work-changes-resizer:focus-visible::after { background: var(--control-focus); }
+@media (hover: hover) and (pointer: fine) {
+    .work-changes-resizer:hover::after { background: var(--control-focus); }
+}
+@media (pointer: coarse) {
+    .work-changes-resizer {
+        inset-block: calc(50% - 22px) auto;
+        inset-inline-start: -23px;
+        width: 44px;
+        height: 44px;
+    }
+}
+.work-changes-actions { display: flex; flex: none; align-items: center; gap: 8px; }
+.reset-changes-width { min-height: 36px; padding-inline: 6px; font-size: 12px; }
 .work-changes-header, .work-changes-toolbar {
     display: flex;
     justify-content: space-between;
@@ -805,6 +846,7 @@ kbd { background: #f3f4f5; border-radius: 4px; padding: 1px 5px; font-family: in
     .work-review-layout { grid-template-columns: minmax(0, 1fr); }
     .work-review-layout > .detail { visibility: hidden; }
     .work-review-layout > #work-changes-host { grid-area: 1 / 1; border-left: 0; }
+    .work-changes-resizer, .reset-changes-width { display: none; }
 }
 @media (max-width: 760px) {
     .changes-close, #close-activity { width: 44px; height: 44px; }
@@ -821,6 +863,7 @@ kbd { background: #f3f4f5; border-radius: 4px; padding: 1px 5px; font-family: in
 }
 @media (forced-colors: active) {
     .diff-file-nav button[aria-current="true"] { border-color: Highlight; }
+    .work-changes-resizer::after { background: ButtonText; }
 }
 .work-support .progress-list { display: block; }
 .work-support .progress-row > summary { min-height: 56px; gap: 8px; padding: 10px 0; }
@@ -1092,7 +1135,6 @@ kbd { background: #f3f4f5; border-radius: 4px; padding: 1px 5px; font-family: in
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
     gap: 18px;
 }
-.board-lanes[data-columns="1"] { max-width: 420px; }
 .board-lane { min-width: 0; }
 .board-lane-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 2px 2px 9px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
 .board-lane-heading h2 { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 500; line-height: 1.3; }

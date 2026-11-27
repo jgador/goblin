@@ -84,15 +84,17 @@ public sealed partial class DurabilityTests
                 Text = text,
                 Direct = true
             };
-        ExternalMessage request = Message("EV2", "2.000001", "Explain the design");
+        const string description = "Why is the build slow?";
+        ExternalMessage request = Message("EV2", "2.000001", description);
         await Task.WhenAll(store.AcceptAsync(request, default), store.AcceptAsync(request, default));
-        await store.AcceptAsync(Message("EV3", "2.000001", "Explain the design"), default);
+        await store.AcceptAsync(Message("EV3", "2.000001", description), default);
         ExternalReply reply = (await store.ProcessNextAsync(installation, default))!;
         Assert.NotNull(reply.WorkId);
         Assert.Equal(ExternalReplyKind.WorkSaved, reply.Kind);
         Assert.Null(await store.ProcessNextAsync(installation, default));
         await fixture.Until(reply.WorkId!.Value, view => view.Work.Attempts[0].Status == AttemptStatus.Starting);
         WorkView work = await fixture.Get(reply.WorkId.Value);
+        Assert.Equal(description, work.Work.Description);
         Assert.Single(work.Work.Attempts);
         Assert.Equal(1, fixture.Runtime.Starts[work.Work.Attempts[0].Id]);
         ConversationView conversation = Assert.Single(await scope.ServiceProvider.GetRequiredService<ConversationStore>().ListAsync());
@@ -103,7 +105,9 @@ public sealed partial class DurabilityTests
         await store.AcceptAsync(Message("EV5", "2.000003", "Do not accept after revocation"), default);
         await store.RevokeAsync(installation, identity.Id, default);
         Assert.Null((await store.ProcessNextAsync(installation, default))!.WorkId);
-        Assert.Single((await fixture.Get(reply.WorkId.Value)).Work.Messages);
+        WorkView updated = await fixture.Get(reply.WorkId.Value);
+        Assert.Equal(description, updated.Work.Description);
+        Assert.Equal("Additional context", Assert.Single(updated.Work.Messages).Text);
         await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
         Assert.False(await db.ExternalMessages.AnyAsync(x => x.Body != null && x.Body.Contains(code.Code)));
     }
@@ -1435,7 +1439,7 @@ public sealed partial class DurabilityTests
         Assert.Equal(2, Assert.Single(await store.ListAsync()).Messages.Length);
         WorkView work = await fixture.Get(workId);
         Assert.Equal(2, work.Version);
-        Assert.Equal("Track this conversation", work.Work.Objective);
+        Assert.Equal("Track this conversation", work.Work.Description);
         Assert.Equal(WorkStore.DefaultAgentId, work.Work.AgentId);
         Assert.Equal(WorkStatus.Ready, work.Work.Status);
         Assert.Empty(work.Work.Attempts);
@@ -1820,8 +1824,8 @@ public sealed partial class DurabilityTests
         await using Fixture fixture = await Fixture.CreateAsync();
         WorkStore store = fixture.Host.Services.GetRequiredService<WorkStore>();
         long id = NextId();
-        const string objective = "Make the weekly reports easier to review. Preserve all totals and examples.";
-        WorkCommand create = WorkCommands.Create(NextId(), id, objective);
+        const string description = "Make the weekly reports easier to review. Preserve all totals and examples.";
+        WorkCommand create = WorkCommands.Create(NextId(), id, description);
         fixture.Titles.Title = null;
         Assert.Equal("work_title_connection_required", (await Assert.ThrowsAsync<ApplicationFailure>(() => store.ApplyAsync(create))).Code);
         fixture.Titles.Title = new string('x', 91);
@@ -1831,24 +1835,37 @@ public sealed partial class DurabilityTests
         fixture.Titles.Title = "Improve weekly reports";
         WorkView created = await store.ApplyAsync(create);
         Assert.Equal("Improve weekly reports", created.Work.Title);
-        Assert.Equal(objective, created.Work.Objective);
+        Assert.Equal(description, created.Work.Description);
         Assert.Empty(created.Work.Attempts);
         fixture.Titles.Title = null;
         Assert.Equal(created.Work.Title, (await store.ApplyAsync(create)).Work.Title);
         Assert.Equal(3, fixture.Titles.Calls);
 
+        string maxTitle = new('x', WorkTitle.MaxLength);
+        WorkCommand tooLong = new(NextId(), id, WorkAction.Rename)
+        { Text = maxTitle + "x", ExpectedVersion = created.Version };
+        Assert.Equal(WorkRule.InvalidTitle, (await Assert.ThrowsAsync<WorkRuleException>(() => store.ApplyAsync(tooLong))).Rule);
         WorkCommand rename = new(NextId(), id, WorkAction.Rename)
-        { Text = "Simplify the weekly report format", ExpectedVersion = created.Version };
+        { Text = maxTitle, ExpectedVersion = created.Version };
         WorkView renamed = await store.ApplyAsync(rename);
         Assert.Equal(rename.Text, renamed.Work.Title);
         Assert.Equal(WorkEventKind.Renamed, renamed.Work.History[^1].Kind);
-        Assert.Equal(objective, renamed.Work.Objective);
+        Assert.Equal(description, renamed.Work.Description);
         Assert.Equal(renamed.Version, (await store.ApplyAsync(rename)).Version);
         WorkCommand stale = new(NextId(), id, WorkAction.Rename) { Text = "Stale title", ExpectedVersion = created.Version };
         Assert.Equal("work_changed", (await Assert.ThrowsAsync<ApplicationFailure>(() => store.ApplyAsync(stale))).Code);
         Assert.Equal(3, fixture.Titles.Calls);
         await fixture.RestartAsync();
-        Assert.Equal(renamed.Work.Title, (await fixture.Host.Services.GetRequiredService<WorkStore>().GetAsync(id)).Work.Title);
+        WorkSnapshot restored = (await fixture.Host.Services.GetRequiredService<WorkStore>().GetAsync(id)).Work;
+        Assert.Equal(renamed.Work.Title, restored.Title);
+        Assert.Equal(description, restored.Description);
+        await using GoblinDbContext db = await fixture.Host.Services.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
+        Persistence.Entities.WorkItem row = await db.WorkItems.SingleAsync(x => x.Id == id);
+        Assert.Equal(maxTitle, row.Title);
+        Assert.Equal(description, row.Description);
+        using JsonDocument state = JsonDocument.Parse(row.State);
+        Assert.False(state.RootElement.TryGetProperty("title", out _));
+        Assert.False(state.RootElement.TryGetProperty("description", out _));
     }
 
     private sealed class TitleGenerator : IWorkTitleGenerator
@@ -1857,7 +1874,7 @@ public sealed partial class DurabilityTests
         public int Calls => _calls;
         public string? Title { get; set; } = "Review the request";
 
-        public Task<string?> GenerateAsync(string objective, CancellationToken cancellationToken)
+        public Task<string?> GenerateAsync(string description, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _calls);
             return Task.FromResult(Title);
@@ -2026,10 +2043,10 @@ public sealed partial class DurabilityTests
         public Task<WorkView> StartGitRepositoryWork(string gitRepository) =>
             StartGitRepositoryWork(gitRepository, "Repository setup memory");
 
-        public async Task<WorkView> StartGitRepositoryWork(string gitRepository, string objective)
+        public async Task<WorkView> StartGitRepositoryWork(string gitRepository, string description)
         {
             long id = NextId();
-            WorkView work = await Apply(WorkCommands.Create(NextId(), id, objective));
+            WorkView work = await Apply(WorkCommands.Create(NextId(), id, description));
             work = await Apply(new(NextId(), id, WorkAction.Assign)
             {
                 ExpectedVersion = work.Version,

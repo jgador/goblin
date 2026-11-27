@@ -16,7 +16,7 @@ public sealed partial class WorkItem
     private readonly List<WorkArtifact> _artifacts = [];
 
     public long Id { get; }
-    public string Objective { get; }
+    public string Description { get; }
     public string? Title { get; private set; }
     public long? AgentId { get; private set; }
     public WorkStatus Status { get; private set; } = WorkStatus.Ready;
@@ -29,16 +29,16 @@ public sealed partial class WorkItem
     public IReadOnlyList<WorkArtifact> Artifacts { get; }
     public ExecutionAttempt? CurrentAttempt => _attempts.Count == 0 ? null : _attempts[^1];
 
-    public WorkItem(long id, string objective, DateTimeOffset now, string title)
-        : this(id, objective, WorkTitle.Require(title), now)
+    public WorkItem(long id, string description, DateTimeOffset now, string title)
+        : this(id, description, WorkTitle.Require(title), now)
     {
     }
 
-    private WorkItem(long id, string objective, string? title, DateTimeOffset now)
+    private WorkItem(long id, string description, string? title, DateTimeOffset now)
     {
         RequireId(id);
         Id = id;
-        Objective = RequireText(objective);
+        Description = RequireText(description);
         Title = title;
         Attempts = _attempts.AsReadOnly();
         History = _history.AsReadOnly();
@@ -46,7 +46,7 @@ public sealed partial class WorkItem
         Results = _results.AsReadOnly();
         Messages = _messages.AsReadOnly();
         Artifacts = _artifacts.AsReadOnly();
-        Record(WorkEventKind.Created, now, text: Objective);
+        Record(WorkEventKind.Created, now, text: Description);
     }
 
     public void Rename(string? title, DateTimeOffset now)

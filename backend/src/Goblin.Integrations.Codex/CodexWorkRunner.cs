@@ -64,7 +64,7 @@ public sealed class CodexWorkRunner
                         "Otherwise answer or ask clarifying questions using the saved Work context.")
             }, token);
             transcript.SetThread(thread.Thread.Id);
-            string context = JsonSerializer.Serialize(new CodexWorkContext(work.Objective, work.Messages,
+            string context = JsonSerializer.Serialize(new CodexWorkContext(work.Description, work.Messages,
                 work.Decisions, work.Results, work.Artifacts)
             {
                 GitRepositorySetupMemory = gitRepositoryChanges ? setupMemory ?? [] : null

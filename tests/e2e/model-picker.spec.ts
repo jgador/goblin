@@ -64,7 +64,7 @@ async function workspace(page: Page) {
                     updatedAt: now.toISOString(),
                     work: {
                         id: "1",
-                        objective: "Select execution options",
+                        description: "Select execution options",
                         agentId: "1",
                         status: "Ready",
                         attempts: [],

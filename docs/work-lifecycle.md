@@ -8,7 +8,7 @@ attempts, Git checkpoints, and PVCs.
 ## Using Work
 
 **Work inbox** opens in **Board** view, grouping items into Ready, In progress,
-Needs attention, and Closed. The board shows lanes with matching items. Closed includes
+Needs attention, and Closed. All four lanes stay visible when empty. Closed includes
 completed and cancelled Work. Choose **List** to see items ordered by most recently
 updated. **Status** in List includes the Board groups and individual Completed and
 Cancelled filters. **Filter inbox** narrows either view. The **Needs attention**
@@ -25,7 +25,8 @@ is saved in browser local storage and reused on reload. Select **Refresh now** i
 the same menu to update the workspace immediately.
 
 In **New work**, **Create work** uses the connected Codex account to generate a title
-of up to 90 characters, then saves it with the full goal and assigns the default agent.
+of up to 90 characters, then saves your request as the description and assigns the
+default agent. The description can be a change request or a question.
 A failed title request keeps the draft available to retry.
 The **Codex** button shows the current status and links to connection settings.
 When Codex is disconnected, **Connect Codex** below the composer opens its setup page.
@@ -37,14 +38,12 @@ to title new Work. An authorized Slack DM or mention starts Work after it is sav
 See [Slack](slack-integration.md).
 
 Choose **Rename work** beside the title to edit it. **Enter** saves and **Escape**
-cancels. Renaming works with Codex disconnected. Work created before titles were
-introduced is identified by its Work number and can receive a title through the same
-editor. Open **Full objective** to read the original goal. Goblin posts questions and
-proposed results in the Work conversation. The review area offers **Approve &
-complete** and **Request changes**. The composer keeps separate drafts for context
-and review feedback. **Saved outputs** contains results and artifacts, and
-**Execution details** contains progress and attempt records. **Add note** saves
-local context to closed Work.
+cancels. Renaming works with Codex disconnected. Open **Description** to read the
+original request. Goblin posts questions and proposed results in the Work conversation.
+The review area offers **Approve & complete** and **Request changes**. The composer
+keeps separate drafts for context and review feedback. **Saved outputs** contains
+results and artifacts, and **Execution details** contains progress and attempt
+records. **Add note** saves local context to closed Work.
 
 Approving or cancelling repository Work schedules deletion of its local workspace
 files. Open Work keeps its workspace for retries and revisions.
@@ -60,7 +59,9 @@ For repository-backed Work, **Review changes** opens the saved patch when one is
 available. During result review, find it alongside the approval and feedback
 actions. In other active states, the toolbar’s **Changes** button toggles the
 preview. The diff opens beside the conversation on wide screens or across the Work area
-on narrow screens.
+on narrow screens. When the panes are side by side, drag their divider or focus it and
+use the arrow keys to resize Changes. Your browser remembers the width across Work
+items. Choose **Reset width** in the Changes header to restore the default.
 Close the full diff or press **Escape** while reviewing to return to the summary.
 **All files** shows a continuous review, **By file** lets you select a path, and
 **Wrap lines** fits long lines within the diff.
@@ -73,8 +74,9 @@ payload; **Keep saved state** keeps the server view. Refresh never replays a com
 Drafts survive navigation within the page; unsent conversation drafts do not survive a
 reload. Browser search covers loaded content, not a server index.
 
-The title and original goal are stored separately in the Work snapshot. Artifacts expose
-metadata and references rather than content retrieval; there is no execution-log view.
+PostgreSQL stores the title and description in the `public.work_item` columns.
+Goblin combines them with the lifecycle snapshot in `state` to display Work.
+Artifacts expose metadata and references. The Work UI has no execution-log view.
 
 Open the workspace menu at the bottom of the sidebar to find **Settings**, **System**,
 and **Lock workspace**. With the sidebar collapsed, the menu opens from the left side
@@ -97,8 +99,8 @@ Clients reserve IDs through the
 [identity endpoint](../backend/src/Goblin.Web/Http/Endpoints/WorkEndpoints.cs) before
 submitting commands and retain them after an unconfirmed response. Different identity
 kinds can have equal IDs; sequence gaps are expected. Attempts reserve their IDs in the
-command transaction. The saved Work snapshot is the source of truth; summary columns
-cannot replace it.
+command transaction. The persisted lifecycle snapshot is authoritative for Work
+transitions, and the title and description come from their columns.
 
 ## Attention belongs to Work
 
@@ -177,7 +179,7 @@ dispatch, restart, uncertainty, and cleanup. Core tests do not replace them.
 [Repository intent](git-repository-intent.md) owns repository selection, authorization,
 and delivery. The lifecycle rules are:
 
-- Naming a repository in an objective, context, or answer never grants access by
+- Naming a repository in a description, context, or answer never grants access by
   itself; execution requires standing enablement or approval of a saved preview.
 - An enabled repository starts with a fresh grant. A disabled repository needs a
   saved preview and explicit approval; the attempt, receipt, enablement, and

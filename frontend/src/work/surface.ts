@@ -33,7 +33,7 @@ export function matchesWork(
 ) {
     return [
         w.title ?? "",
-        w.objective,
+        w.description,
         w.id,
         agent,
         ...w.decisions.flatMap((d) => [d.question, d.answer ?? ""]),
@@ -69,8 +69,8 @@ export function renderProgress(item: View) {
                 : label(w.status);
     const rows = [
         {
-            id: "goal",
-            title: "Goal captured",
+            id: "description",
+            title: "Description saved",
             done: true,
             state: "Saved",
             evidence: `Work ${w.id} · Created ${timestamp(item.createdAt)}`,

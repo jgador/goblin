@@ -6,7 +6,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Goblin.Application.Work;
-using Goblin.Contracts;
 using Goblin.Persistence;
 using Goblin.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -73,7 +72,7 @@ public sealed partial class DurabilityTests
         await WaitForStorageAsync(async () =>
         {
             await using GoblinDbContext db = await factory.CreateDbContextAsync();
-            return await db.WorkItems.AnyAsync(row => row.Id == committed && row.Objective == "Consumed storage dispatch");
+            return await db.WorkItems.AnyAsync(row => row.Id == committed && row.Description == "Consumed storage dispatch");
         });
         long rejected = NextId();
         await fixture.RejectId("work_item", rejected);
@@ -105,7 +104,7 @@ public sealed partial class DurabilityTests
         await WaitForStorageAsync(async () =>
         {
             await using GoblinDbContext db = await factory.CreateDbContextAsync();
-            return await db.WorkItems.AnyAsync(row => row.Id == id && row.Objective == "Consumed storage dispatch");
+            return await db.WorkItems.AnyAsync(row => row.Id == id && row.Description == "Consumed storage dispatch");
         });
         await using GoblinDbContext read = await factory.CreateDbContextAsync();
         Assert.Single(await read.WorkItems.ToArrayAsync());
@@ -270,12 +269,9 @@ public static class StorageTransactionHandler
     [Transactional(typeof(GoblinDbContext))]
     public static StorageConsumed Handle(StorageTransaction message, GoblinDbContext db)
     {
-        db.WorkItems.Add(new WorkItem
-        {
-            Id = message.Id,
-            Objective = "Storage transaction",
-            State = JsonSerializer.Serialize(new Core.Work.WorkItem(message.Id, "Storage transaction", DateTimeOffset.UtcNow, "Test work").Snapshot(), ContractJson.Options)
-        });
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        var work = new Core.Work.WorkItem(message.Id, "Storage transaction", now, "Test work");
+        db.WorkItems.Add(WorkStatePersistence.Create(work, now));
         return new StorageConsumed(message.Id);
     }
 }
@@ -286,6 +282,6 @@ public static class StorageConsumedHandler
     public static async Task Handle(StorageConsumed message, GoblinDbContext db)
     {
         WorkItem item = await db.WorkItems.SingleAsync(row => row.Id == message.Id);
-        item.Objective = "Consumed storage dispatch";
+        item.Description = "Consumed storage dispatch";
     }
 }

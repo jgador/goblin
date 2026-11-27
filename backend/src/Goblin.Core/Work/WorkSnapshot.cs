@@ -14,7 +14,7 @@ public sealed class WorkSnapshot
 
     public long Id { get; init; }
 
-    public string Objective { get; init; } = null!;
+    public string Description { get; init; } = null!;
 
     public string? Title { get; init; }
 
@@ -128,7 +128,7 @@ public sealed partial class WorkItem
         {
             SchemaVersion = 2,
             Id = Id,
-            Objective = Objective,
+            Description = Description,
             Title = Title,
             AgentId = AgentId,
             Status = Status,
@@ -148,9 +148,15 @@ public sealed partial class WorkItem
     public static WorkItem Restore(WorkSnapshot state)
     {
         ArgumentNullException.ThrowIfNull(state);
+        return Restore(state, state.Description, state.Title);
+    }
+
+    public static WorkItem Restore(WorkSnapshot state, string description, string? title)
+    {
+        ArgumentNullException.ThrowIfNull(state);
         Require(state.SchemaVersion == 2 && state.History.Length > 0 &&
             (state.AgentId is null or > 0) && Enum.IsDefined(state.Status), WorkRule.InvalidValue);
-        var work = new WorkItem(state.Id, state.Objective, state.Title is null ? null : WorkTitle.Require(state.Title),
+        var work = new WorkItem(state.Id, description, title is null ? null : WorkTitle.Require(title),
             state.History[0].OccurredAt)
         {
             AgentId = state.AgentId,

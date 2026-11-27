@@ -20,7 +20,7 @@ internal sealed class ChatGptWorkOverview
 {
     public required string WorkId { get; init; }
     public required long Version { get; init; }
-    public required string Objective { get; init; }
+    public required string Description { get; init; }
     public string? Title { get; init; }
     public required WorkStatus Status { get; init; }
     public string? AgentId { get; init; }
@@ -38,7 +38,7 @@ internal sealed class ChatGptWorkOverview
         {
             WorkId = Id(work.Id),
             Version = view.Version,
-            Objective = work.Objective,
+            Description = work.Description,
             Title = work.Title,
             Status = work.Status,
             AgentId = work.AgentId is long agent ? Id(agent) : null,

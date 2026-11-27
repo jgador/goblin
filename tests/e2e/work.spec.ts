@@ -25,7 +25,7 @@ test.describe("durable Work", () => {
     }
     async function create(
         page: import("@playwright/test").Page,
-        objective: string,
+        description: string,
     ) {
         await page
             .getByRole("button", { name: "New work", exact: true })
@@ -33,12 +33,12 @@ test.describe("durable Work", () => {
             .click();
         await page
             .getByRole("textbox", { name: "Describe the work" })
-            .fill(objective);
+            .fill(description);
         await page
             .getByRole("button", { name: "Create work", exact: true })
             .click();
-        await expect(page.locator(".work-objective-full")).toHaveText(
-            objective,
+        await expect(page.locator(".work-description-full")).toHaveText(
+            description,
         );
         await expect(
             page.getByRole("button", { name: "Assign agent", exact: true }),
@@ -46,12 +46,13 @@ test.describe("durable Work", () => {
         const id = new URL(page.url()).searchParams.get("item");
         const saved = (await (await page.request.get(`/api/work/${id}`)).json())
             .work;
+        expect(saved.description).toBe(description);
         expect(saved.agentId).toBe("1");
         expect(saved.status).toBe("Ready");
         expect(saved.attempts).toEqual([]);
     }
     for (const fromConversation of [false, true]) {
-        test(`enabled repository defaults continue the same Work ${fromConversation ? "after a conversation" : "from its objective"}`, async ({
+        test(`enabled repository defaults continue the same Work ${fromConversation ? "after a conversation" : "from its description"}`, async ({
             page,
         }) => {
             await page.route("**/api/github", (route) =>
@@ -171,19 +172,19 @@ test.describe("durable Work", () => {
         page,
     }) => {
         await unlock(page);
-        const objective = "Choose a model " + Date.now();
+        const description = "Choose a model " + Date.now();
         await page
             .getByRole("button", { name: "New work", exact: true })
             .first()
             .click();
         await page
             .getByRole("textbox", { name: "Describe the work" })
-            .fill(objective);
+            .fill(description);
         await page
             .getByRole("button", { name: "Create work", exact: true })
             .click();
-        await expect(page.locator(".work-objective-full")).toHaveText(
-            objective,
+        await expect(page.locator(".work-description-full")).toHaveText(
+            description,
         );
         await page.locator(".model-picker-trigger").click();
         const popover = page.getByRole("dialog", {
@@ -281,7 +282,7 @@ test.describe("durable Work", () => {
         await page
             .getByRole("button", { name: "Track this work", exact: true })
             .click();
-        await expect(page.locator(".work-objective-full")).toContainText(
+        await expect(page.locator(".work-description-full")).toContainText(
             "Plan a release",
         );
         await page.locator(".model-picker-trigger").click();
@@ -325,37 +326,50 @@ test.describe("durable Work", () => {
             });
     });
 
-    test("a renamed Work title survives a reload with the original objective", async ({
-        page,
-    }) => {
-        await unlock(page);
-        const objective =
-            "Verify the totals in the weekly report. Keep the existing examples.";
-        await create(page, objective);
-        const title = "Check weekly report totals";
-        await page
-            .getByRole("button", { name: "Rename work", exact: true })
-            .click();
-        const editor = page.getByRole("textbox", { name: "Work title" });
-        await editor.fill(title);
-        await editor.press("Enter");
-        await expect(
-            page.getByRole("heading", { name: title, exact: true }),
-        ).toBeVisible();
-        await page.reload();
-        await expect(
-            page.getByRole("heading", { name: title, exact: true }),
-        ).toBeVisible();
-        await expect(page.locator(".work-objective-full")).toHaveText(
-            objective,
-        );
-        await page
-            .getByRole("button", { name: "Back to inbox", exact: true })
-            .click();
-        await expect(
-            page.getByRole("button", { name: title, exact: true }),
-        ).toBeVisible();
-    });
+    for (const { kind, description, title } of [
+        {
+            kind: "a change request",
+            description:
+                "Verify the totals in the weekly report. Keep the existing examples.",
+            title: "Check weekly report totals",
+        },
+        {
+            kind: "an informational question",
+            description:
+                "Why is the build slow?\nFocus on the time after compilation.",
+            title: "Build time after compilation",
+        },
+    ]) {
+        test(`the description of ${kind} survives renaming and reloading Work`, async ({
+            page,
+        }) => {
+            await unlock(page);
+            await create(page, description);
+            await page
+                .getByRole("button", { name: "Rename work", exact: true })
+                .click();
+            const editor = page.getByRole("textbox", { name: "Work title" });
+            await editor.fill(title);
+            await editor.press("Enter");
+            const heading = page.getByRole("heading", {
+                name: title,
+                exact: true,
+            });
+            await expect(heading).toBeVisible();
+            await page.reload();
+            await expect(heading).toBeVisible();
+            await page.getByText("Description", { exact: true }).click();
+            const savedDescription = page.locator(".work-description-full");
+            await expect(savedDescription).toBeVisible();
+            await expect(savedDescription).toHaveText(description);
+            await page
+                .getByRole("button", { name: "Back to inbox", exact: true })
+                .click();
+            await expect(
+                page.getByRole("button", { name: title, exact: true }),
+            ).toBeVisible();
+        });
+    }
     test("decisions, revisions, provenance, and approval survive refresh and another browser", async ({
         page,
         browser,
@@ -363,8 +377,8 @@ test.describe("durable Work", () => {
         const errors: string[] = [];
         page.on("pageerror", (error) => errors.push(error.message));
         await unlock(page);
-        const objective = "A decision for the release " + Date.now();
-        await create(page, objective);
+        const description = "A decision for the release " + Date.now();
+        await create(page, description);
         await page
             .getByRole("button", { name: "Start work", exact: true })
             .click();
@@ -394,8 +408,8 @@ test.describe("durable Work", () => {
             "Completed",
         );
         await page.reload();
-        await expect(page.locator(".work-objective-full")).toHaveText(
-            objective,
+        await expect(page.locator(".work-description-full")).toHaveText(
+            description,
         );
         await page
             .getByRole("button", { name: "Outputs", exact: true })
@@ -427,7 +441,7 @@ test.describe("durable Work", () => {
         const other = await context.newPage();
         await unlock(other);
         await other
-            .getByRole("button", { name: new RegExp(objective) })
+            .getByRole("button", { name: new RegExp(description) })
             .click();
         await expect(other.locator(".detail .status-pill")).toHaveText(
             "Completed",
@@ -449,8 +463,8 @@ test.describe("durable Work", () => {
         ).toBeVisible({ timeout: 15000 });
         const before = (
             await (await page.request.get("/api/work")).json()
-        ).find((x: { work: { objective: string } }) =>
-            x.work.objective.startsWith("Test failure"),
+        ).find((x: { work: { description: string } }) =>
+            x.work.description.startsWith("Test failure"),
         );
         await page.reload();
         await expect(
@@ -481,7 +495,7 @@ test.describe("durable Work", () => {
         await page
             .getByRole("button", { name: "Track this work", exact: true })
             .click();
-        await expect(page.locator(".work-objective-full")).toHaveText(text);
+        await expect(page.locator(".work-description-full")).toHaveText(text);
         await page.reload();
         await page.keyboard.press("Control+k");
         await page
@@ -491,7 +505,7 @@ test.describe("durable Work", () => {
             .getByRole("listbox", { name: "Search results", exact: true })
             .getByRole("option", { name: text, exact: true })
             .click();
-        await expect(page.locator(".work-objective-full")).toHaveText(text);
+        await expect(page.locator(".work-description-full")).toHaveText(text);
         await expect(page.locator('img[src="x"]')).toHaveCount(0);
         await page.screenshot({
             path: test.info().outputPath("desktop-work.png"),
@@ -523,7 +537,7 @@ test.describe("durable Work", () => {
         page,
     }) => {
         await unlock(page);
-        const objective = "Lost response " + Date.now();
+        const description = "Lost response " + Date.now();
         await page.route(
             "**/api/work/commands",
             async (route) => {
@@ -535,7 +549,7 @@ test.describe("durable Work", () => {
         await page
             .getByRole("button", { name: "New work", exact: true })
             .click();
-        await page.getByRole("textbox").fill(objective);
+        await page.getByRole("textbox").fill(description);
         await page
             .getByRole("button", { name: "Create work", exact: true })
             .click();
@@ -544,14 +558,14 @@ test.describe("durable Work", () => {
         ).toBeVisible();
         await page.reload();
         await page.getByRole("button", { name: "Resend command" }).click();
-        await expect(page.locator(".work-objective-full")).toHaveText(
-            objective,
+        await expect(page.locator(".work-description-full")).toHaveText(
+            description,
         );
         const saved = await (await page.request.get("/api/work")).json();
         expect(
             saved.filter(
-                (x: { work: { objective: string } }) =>
-                    x.work.objective === objective,
+                (x: { work: { description: string } }) =>
+                    x.work.description === description,
             ),
         ).toHaveLength(1);
     });
@@ -560,7 +574,7 @@ test.describe("durable Work", () => {
         page,
     }) => {
         await unlock(page);
-        const objective = "Allocation interrupted " + Date.now();
+        const description = "Allocation interrupted " + Date.now();
         let submissions = 0;
         page.on("request", (request) => {
             if (request.url().endsWith("/api/work/commands")) submissions++;
@@ -574,7 +588,7 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "New work", exact: true })
             .first()
             .click();
-        await page.getByRole("textbox").fill(objective);
+        await page.getByRole("textbox").fill(description);
         await page
             .getByRole("button", { name: "Create work", exact: true })
             .click();
@@ -582,13 +596,13 @@ test.describe("durable Work", () => {
         await expect(
             page.getByRole("button", { name: "Resend command" }),
         ).toHaveCount(0);
-        await expect(page.getByRole("textbox")).toHaveValue(objective);
+        await expect(page.getByRole("textbox")).toHaveValue(description);
         expect(submissions).toBe(0);
         await page
             .getByRole("button", { name: "Create work", exact: true })
             .click();
-        await expect(page.locator(".work-objective-full")).toHaveText(
-            objective,
+        await expect(page.locator(".work-description-full")).toHaveText(
+            description,
         );
         expect(submissions).toBe(1);
     });
@@ -625,7 +639,7 @@ test.describe("durable Work", () => {
         ).toBeVisible();
         expect((await page.request.get("/readyz")).status()).toBe(200);
         await page.reload();
-        await expect(page.locator(".work-objective-full")).toContainText(
+        await expect(page.locator(".work-description-full")).toContainText(
             "History remains available",
         );
     });

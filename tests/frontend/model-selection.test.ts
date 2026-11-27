@@ -25,7 +25,7 @@ function storage(saved?: string) {
 function work(id = "1"): Work {
     return {
         id,
-        objective: "Test",
+        description: "Test",
         status: WorkStatus.Ready,
         attempts: [],
         history: [],

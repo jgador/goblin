@@ -21,13 +21,13 @@ internal sealed class FakeWorkHost : IExecutionHost, IWorkspaceVolumeHost
 
     public Task StartAsync(WorkSnapshot work, CancellationToken token)
     {
-        bool question = work.Objective.Contains("decision", StringComparison.OrdinalIgnoreCase) && work.Decisions.Length == 0;
-        if (work.Objective.Contains("repository handoff", StringComparison.OrdinalIgnoreCase) && work.Attempts[^1].Target.GitRepository is null)
+        bool question = work.Description.Contains("decision", StringComparison.OrdinalIgnoreCase) && work.Decisions.Length == 0;
+        if (work.Description.Contains("repository handoff", StringComparison.OrdinalIgnoreCase) && work.Attempts[^1].Target.GitRepository is null)
             return ExecutionFiles.WriteAsync(PathFor(work), new ExecutionObservation(ObservationKind.WorkspaceRequired,
                 new("fixture-model", "conversation-session", "fixture-operation"), "Inspect the repository files."), token);
         return ExecutionFiles.WriteAsync(PathFor(work), new ExecutionObservation(
-            work.Objective.Contains("failure", StringComparison.OrdinalIgnoreCase) ? ObservationKind.Failed : question ? ObservationKind.InputRequired : ObservationKind.Result,
-            new("fixture-model", "fixture-session", "fixture-operation"), question ? "Which outcome should I prioritize?" : "Proposed result for: " + work.Objective,
+            work.Description.Contains("failure", StringComparison.OrdinalIgnoreCase) ? ObservationKind.Failed : question ? ObservationKind.InputRequired : ObservationKind.Result,
+            new("fixture-model", "fixture-session", "fixture-operation"), question ? "Which outcome should I prioritize?" : "Proposed result for: " + work.Description,
             FailureKind.ExecutionFailed), token);
     }
 

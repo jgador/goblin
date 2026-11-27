@@ -118,26 +118,16 @@ function rows(items: readonly View[]) {
 }
 
 function columns(items: readonly View[]) {
-    const groups = lanes
-        .map((lane) => ({
-            ...lane,
-            items: items.filter(
-                ({ work }) => laneByStatus[work.status] === lane.id,
-            ),
-        }))
-        .filter((lane) => lane.items.length);
-    return `<div class="board-lanes" data-columns="${groups.length}">
-        ${groups
-            .map(
-                ({
-                    id,
-                    name,
-                    icon: symbol,
-                    items,
-                }) => `<section class="board-lane" data-lane="${id}" aria-labelledby="lane-${id}"><div class="board-lane-heading">
-                <h2 id="lane-${id}">${icon(symbol)}${name}</h2><span class="board-lane-count">${items.length}</span>
-            </div><ul role="list">${items.map(card).join("")}</ul></section>`,
-            )
+    return `<div class="board-lanes">
+        ${lanes
+            .map(({ id, name, icon: symbol }) => {
+                const laneItems = items.filter(
+                    ({ work }) => laneByStatus[work.status] === id,
+                );
+                return `<section class="board-lane" data-lane="${id}" aria-labelledby="lane-${id}"><div class="board-lane-heading">
+                <h2 id="lane-${id}">${icon(symbol)}${name}</h2><span class="board-lane-count">${laneItems.length}</span>
+            </div>${laneItems.length ? `<ul role="list">${laneItems.map(card).join("")}</ul>` : ""}</section>`;
+            })
             .join("")}
     </div>`;
 }
@@ -203,7 +193,7 @@ export function renderBoard({
         : search.trim() && !matches.length
           ? "No work matches your search."
           : !total
-            ? "Create work to give Goblin a goal."
+            ? "Create work to send Goblin a request."
             : "No work matches this status.";
     return `<section class="board-workspace" aria-labelledby="board-heading" data-scroll="board">
         <div class="board-inner">
@@ -214,12 +204,13 @@ export function renderBoard({
                 <p class="board-result-count" role="status"><span class="board-count" ${loaded ? "" : "hidden"}>${count}</span></p>
             </div>
             <div class="board-content">
+                ${loaded && layout === "board" ? columns(shown) : ""}
                 ${
-                    loaded && shown.length
-                        ? layout === "board"
-                            ? columns(shown)
-                            : rows(shown)
-                        : `<div class="board-empty"><p role="status">${empty}</p>${loaded && search.trim() ? '<button class="text-button" data-action="clear-inbox-search">Clear filter</button>' : ""}</div>`
+                    !loaded || !shown.length
+                        ? `<div class="board-empty"><p role="status">${empty}</p>${loaded && search.trim() ? '<button class="text-button" data-action="clear-inbox-search">Clear filter</button>' : ""}</div>`
+                        : layout === "list"
+                          ? rows(shown)
+                          : ""
                 }
             </div>
         </div>

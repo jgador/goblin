@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Goblin.Contracts;
 using Goblin.Database;
@@ -36,23 +37,27 @@ public sealed class PostgresTests
     {
         await using TestDatabase database = await TestDatabase.CreateAsync();
         const long id = 2147483648L;
-        const string objective = "Persist café 🧌 and 'quoted' text";
+        const string description = "Persist café 🧌 and 'quoted' text";
         await using (GoblinDbContext write = await database.ContextFactory.CreateDbContextAsync())
         {
-            write.WorkItems.Add(new WorkItem { Id = id, Objective = objective, State = WorkState(id, objective) });
+            write.WorkItems.Add(new WorkItem { Id = id, Title = "Test work", Description = description, State = WorkState(id, description) });
             await write.SaveChangesAsync();
         }
         await using (GoblinDbContext read = await database.ContextFactory.CreateDbContextAsync())
         {
             WorkItem item = await read.WorkItems.SingleAsync(x => x.Id == id);
-            Assert.Equal(objective, item.Objective);
+            Assert.Equal("Test work", item.Title);
+            Assert.Equal(description, item.Description);
             Assert.Equal(id, JsonSerializer.Deserialize<Core.Work.WorkSnapshot>(item.State, ContractJson.Options)!.Id);
-            item.Objective = "Updated objective";
+            item.Title = "Updated title";
+            item.Description = "Updated description";
             await read.SaveChangesAsync();
         }
         await using (GoblinDbContext delete = await database.ContextFactory.CreateDbContextAsync())
         {
-            Assert.Equal("Updated objective", (await delete.WorkItems.SingleAsync()).Objective);
+            WorkItem item = await delete.WorkItems.SingleAsync();
+            Assert.Equal("Updated title", item.Title);
+            Assert.Equal("Updated description", item.Description);
             await delete.WorkItems.ExecuteDeleteAsync();
         }
         await using GoblinDbContext empty = await database.ContextFactory.CreateDbContextAsync();
@@ -65,10 +70,25 @@ public sealed class PostgresTests
         await using TestDatabase database = await TestDatabase.CreateAsync();
         await using var connection = new NpgsqlConnection(database.AppConnection);
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand("INSERT INTO public.work_item (objective) VALUES ('Missing state');", connection);
+        await using var command = new NpgsqlCommand("INSERT INTO public.work_item (title, description) VALUES ('Test work', 'Missing state');", connection);
         PostgresException error = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync());
         Assert.Equal(PostgresErrorCodes.NotNullViolation, error.SqlState);
         Assert.Equal("state", error.ColumnName);
+    }
+
+    [PostgresFact]
+    public async Task WorkItemsEnforceTheTitleLengthInPostgres()
+    {
+        await using TestDatabase database = await TestDatabase.CreateAsync();
+        await using var connection = new NpgsqlConnection(database.AppConnection);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand("INSERT INTO public.work_item (title, description, state) VALUES (@title, 'Title length check', '{}');", connection);
+        string limit = string.Concat(Enumerable.Repeat("𠮷", Core.Work.WorkTitle.MaxLength));
+        NpgsqlParameter title = command.Parameters.AddWithValue("title", limit);
+        Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        title.Value = limit + "x";
+        PostgresException error = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync());
+        Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
     }
 
     [PostgresFact]
@@ -149,8 +169,8 @@ public sealed class PostgresTests
         await using var app = new NpgsqlConnection(database.AppConnection);
         await app.OpenAsync();
         await using (var seed = new NpgsqlCommand("""
-            INSERT INTO public.work_item (id, objective, state)
-                VALUES (2147483648, 'Finish cleanup', @state);
+            INSERT INTO public.work_item (id, title, description, state)
+                VALUES (2147483648, 'Test work', 'Finish cleanup', @state);
             INSERT INTO public.execution_attempt
                 (id, work_id, agent_id, connection_id, runtime, status, queued_at, updated_at, cleanup_pending)
                 VALUES (2147483648,
@@ -307,8 +327,14 @@ public sealed class PostgresTests
         }
     }
 
-    private static string WorkState(long id, string objective) =>
-        JsonSerializer.Serialize(new Core.Work.WorkItem(id, objective, DateTimeOffset.UtcNow, "Test work").Snapshot(), ContractJson.Options);
+    private static string WorkState(long id, string description)
+    {
+        var work = new Core.Work.WorkItem(id, description, DateTimeOffset.UtcNow, "Test work");
+        JsonObject state = JsonSerializer.SerializeToNode(work.Snapshot(), ContractJson.Options)!.AsObject();
+        state.Remove("title");
+        state.Remove("description");
+        return state.ToJsonString();
+    }
 
     private sealed class TestDatabase : IAsyncDisposable
     {

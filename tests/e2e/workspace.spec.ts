@@ -7,7 +7,7 @@ import {
 // Layout fixtures only. The durable Work journeys exercise the real API and database.
 type WorkFixture = {
     id: string;
-    objective: string;
+    description: string;
     title?: string | null;
     status: string;
     checkpointId?: string;
@@ -25,18 +25,18 @@ async function workspace(
         [
             {
                 id: "1",
-                objective: "Polish the welcome page",
+                description: "Polish the welcome page",
                 status: "NeedsAttention",
                 attention: { reason: "ResultReview" },
             },
             {
                 id: "2",
-                objective: "Investigate slow repository clones",
+                description: "Investigate slow repository clones",
                 status: "InProgress",
             },
             {
                 id: "3",
-                objective: "Write the release notes",
+                description: "Write the release notes",
                 status: "Completed",
             },
             ...extraItems,
@@ -45,7 +45,7 @@ async function workspace(
             createdAt: "2026-09-21T00:00:00Z",
             updatedAt: "2026-09-21T00:00:00Z",
             work: {
-                title: work.objective,
+                title: work.description,
                 ...work,
                 agentId: "1",
                 attempts: [
@@ -311,12 +311,107 @@ test("Changes previews the patch before opening the side-by-side diff", async ({
     expect(commands).toEqual([]);
 });
 
+test("Changes width follows the divider, survives reload, and resets", async ({
+    page,
+}) => {
+    await page.setViewportSize({ width: 1720, height: 960 });
+    await workspace(page);
+    await page.route("**/api/work/1/changes", (route) =>
+        route.fulfill({
+            json: {
+                checkpoint: {
+                    repository: "owner/project",
+                    branch: "goblin/work-1",
+                    commitSha: "a".repeat(40),
+                },
+                baseCommitSha: "b".repeat(40),
+                patch: "diff --git a/welcome.txt b/welcome.txt\n@@ -1 +1 @@\n-Hello\n+Welcome\n",
+            },
+        }),
+    );
+    await page.goto("/work?item=1");
+    const changes = page.getByRole("region", { name: "Changes", exact: true });
+    const openDiff = () =>
+        changes
+            .getByRole("button", { name: "Review changes", exact: true })
+            .click();
+    await openDiff();
+    const divider = changes.getByRole("separator", {
+        name: "Resize Changes panel",
+    });
+    const reset = changes.getByRole("button", { name: "Reset width" });
+    const width = async () => (await changes.boundingBox())!.width;
+    const initial = await width();
+
+    const startDrag = async () => {
+        const bounds = (await divider.boundingBox())!;
+        const x = bounds.x + bounds.width / 2;
+        const y = bounds.y + bounds.height / 2;
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        await page.mouse.move(x - 160, y, { steps: 8 });
+    };
+    await startDrag();
+    await expect.poll(width).toBeCloseTo(initial + 160, 0);
+    await page.keyboard.press("Escape");
+    await page.mouse.up();
+    await expect.poll(width).toBeCloseTo(initial, 0);
+
+    await startDrag();
+    const originalLayout = (await page
+        .locator(".work-review-layout")
+        .elementHandle())!;
+    await page
+        .locator('button[data-action="refresh"]')
+        .evaluate((button: HTMLButtonElement) => button.click());
+    await expect
+        .poll(() => originalLayout.evaluate((element) => element.isConnected))
+        .toBe(false);
+    await expect.poll(width).toBeCloseTo(initial + 160, 0);
+    await page.mouse.up();
+    await expect.poll(width).toBeCloseTo(initial + 160, 0);
+    await divider.press("ArrowLeft");
+    await expect.poll(width).toBeCloseTo(initial + 184, 0);
+    await divider.press("ArrowRight");
+    await expect.poll(width).toBeCloseTo(initial + 160, 0);
+    await refreshWorkspace(page);
+    await expect.poll(width).toBeCloseTo(initial + 160, 0);
+    await page.screenshot({
+        path: test.info().outputPath("changes-resized.png"),
+    });
+
+    await page.reload();
+    await openDiff();
+    await expect.poll(width).toBeCloseTo(initial + 160, 0);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(divider).toBeHidden();
+    await expect(reset).toBeHidden();
+    await page.setViewportSize({ width: 1720, height: 960 });
+    await expect.poll(width).toBeCloseTo(initial + 160, 0);
+    await divider.press("End");
+    await expect(divider).toHaveAttribute(
+        "aria-valuenow",
+        (await divider.getAttribute("aria-valuemax"))!,
+    );
+    const conversation = page.getByRole("region", { name: "Selected work" });
+    expect((await conversation.boundingBox())!.width).toBeGreaterThanOrEqual(
+        319,
+    );
+    await reset.click();
+    await expect(reset).toBeFocused();
+    await expect.poll(width).toBeCloseTo(initial, 0);
+
+    await page.reload();
+    await openDiff();
+    await expect.poll(width).toBeCloseTo(initial, 0);
+});
+
 test("Changes follows new checkpoints while the list control keeps it hidden when requested", async ({
     page,
 }) => {
     const work: WorkFixture = {
         id: "4",
-        objective: "Update the release checklist",
+        description: "Update the release checklist",
         status: "InProgress",
     };
     await workspace(page, true, [work]);
@@ -371,10 +466,10 @@ test("Changes follows new checkpoints while the list control keeps it hidden whe
     const diff = page.getByRole("group", { name: "Diff view" });
     await expect(diff).toBeVisible();
     work.checkpointId = "12";
-    work.objective = "Review the updated checklist";
+    work.description = "Review the updated checklist";
     await refreshWorkspace(page);
     await expect(
-        page.getByRole("heading", { name: work.objective, exact: true }),
+        page.getByRole("heading", { name: work.description, exact: true }),
     ).toBeVisible();
     expect(patchReads).toBe(2);
     await page.getByRole("button", { name: "Close diff" }).click();
@@ -385,10 +480,10 @@ test("Changes follows new checkpoints while the list control keeps it hidden whe
 
     await toggle.click();
     work.checkpointId = "13";
-    work.objective = "Finish the checklist review";
+    work.description = "Finish the checklist review";
     await refreshWorkspace(page);
     await expect(
-        page.getByRole("heading", { name: work.objective, exact: true }),
+        page.getByRole("heading", { name: work.description, exact: true }),
     ).toBeVisible();
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(preview).toBeHidden();
@@ -456,7 +551,7 @@ test.describe("touch review", () => {
                 trial: true,
             });
         await page
-            .getByText("Full objective", { exact: true })
+            .getByText("Description", { exact: true })
             .click({ trial: true });
         const bounds = (await preview.boundingBox())!;
         expect(bounds.x).toBeGreaterThanOrEqual(0);
@@ -549,7 +644,7 @@ test("review feedback uses the Work composer without consuming the context draft
                     work: {
                         id: "1",
                         title: "Review the welcome page",
-                        objective: "Review the welcome page",
+                        description: "Review the welcome page",
                         status: commands.length ? "Ready" : "NeedsAttention",
                         attention: commands.length
                             ? undefined
@@ -737,7 +832,7 @@ for (const width of [1440, 390]) {
                     updatedAt: at,
                     work: {
                         id: command.workId,
-                        objective: command.text,
+                        description: command.text,
                         title: "Simplify the release guide",
                         status: "Ready",
                         agentId: "1",
@@ -759,7 +854,7 @@ for (const width of [1440, 390]) {
         await expect(create).toBeDisabled();
         await expect(
             page.getByText(
-                "Codex writes a title for your goal. Start execution from the Ready item.",
+                "Codex writes a title from your description. Start execution from the Ready item.",
             ),
         ).toBeVisible();
         await page
@@ -772,7 +867,7 @@ for (const width of [1440, 390]) {
                 name: "Simplify the release guide",
             }),
         ).toBeFocused();
-        await expect(page.locator(".work-objective-full")).toHaveText(
+        await expect(page.locator(".work-description-full")).toHaveText(
             "Make the release guide easier to follow",
         );
         await expect(page).toHaveURL(/\/work\?item=11$/);
@@ -888,7 +983,7 @@ test("the New work Codex menu opens in place and keeps the draft when returning 
     expect(commands).toEqual([]);
 });
 
-test("a failed title request keeps the objective ready for another attempt", async ({
+test("a failed title request keeps the description ready for another attempt", async ({
     page,
 }) => {
     await workspace(page);
@@ -910,12 +1005,12 @@ test("a failed title request keeps the objective ready for another attempt", asy
         });
     });
     await page.goto("/?new=work");
-    const objective = page.getByPlaceholder("Describe the work");
+    const description = page.getByPlaceholder("Describe the work");
     const create = page.getByRole("button", {
         name: "Create work",
         exact: true,
     });
-    await objective.fill("Preserve the examples in the release guide");
+    await description.fill("Preserve the examples in the release guide");
     await create.click();
     await expect(
         page.getByText("Generating title…", { exact: true }),
@@ -925,7 +1020,7 @@ test("a failed title request keeps the objective ready for another attempt", asy
     await expect(page.getByRole("alert")).toHaveText(
         "Could not generate a title. Try creating work again.",
     );
-    await expect(objective).toHaveValue(
+    await expect(description).toHaveValue(
         "Preserve the examples in the release guide",
     );
     await expect(create).toBeEnabled();
@@ -942,7 +1037,7 @@ test("renaming works without Codex and a wide 90-character title wraps on the Bo
     const item: WorkFixture = {
         id: "4",
         title: "Review exports",
-        objective: "Review exports and preserve original totals.",
+        description: "Review exports and preserve original totals.",
         status: "Ready",
     };
     await workspace(page, false, [item]);
@@ -959,7 +1054,7 @@ test("renaming works without Codex and a wide 90-character title wraps on the Bo
     await page.goto("/?new=work");
     await page
         .getByPlaceholder("Describe the work")
-        .fill("Keep this objective");
+        .fill("Keep this description");
     await expect(
         page.getByRole("button", { name: "Create work", exact: true }),
     ).toBeDisabled();
@@ -986,8 +1081,8 @@ test("renaming works without Codex and a wide 90-character title wraps on the Bo
     await editor.press("Enter");
     await expect(page.getByRole("heading", { name: title })).toBeVisible();
     await expect(rename).toBeFocused();
-    await expect(page.locator(".work-objective-full")).toHaveText(
-        item.objective,
+    await expect(page.locator(".work-description-full")).toHaveText(
+        item.description,
     );
     expect(commands).toEqual([
         {
@@ -1060,7 +1155,7 @@ test("composer and search show focus outlines for keyboard navigation", async ({
     await expect(search).toHaveCSS("outline-style", "solid");
 });
 
-test("the Work conversation keeps the objective, review and supporting records accessible", async ({
+test("the Work conversation keeps the description, review and supporting records accessible", async ({
     page,
 }) => {
     const commands = await workspace(page);
@@ -1078,10 +1173,12 @@ test("the Work conversation keeps the objective, review and supporting records a
     const conversation = page.getByRole("region", {
         name: "Conversation about this Work",
     });
-    const objective = conversation.locator("#work-objective");
-    await expect(objective.locator("p")).toBeHidden();
-    await objective.locator("summary").click();
-    await expect(objective.locator("p")).toHaveText("Polish the welcome page");
+    const description = conversation.locator("#work-description");
+    await expect(description.locator("p")).toBeHidden();
+    await description.locator("summary").click();
+    await expect(description.locator("p")).toHaveText(
+        "Polish the welcome page",
+    );
     const result = conversation
         .locator("article")
         .filter({ hasText: welcomeResult });
@@ -1116,7 +1213,7 @@ test("the Work conversation keeps the objective, review and supporting records a
         "fixture-model",
     );
     await refreshWorkspace(page);
-    await expect(objective).toHaveAttribute("open", "");
+    await expect(description).toHaveAttribute("open", "");
     await expect(page.locator("#work-outputs")).toHaveAttribute("open", "");
     await expect(draft).toHaveValue("Keep the review draft");
     await page.locator("#result-1 > summary").click();
@@ -1145,7 +1242,7 @@ test("workspace search finds Work content without changing the open item", async
 }) => {
     await workspace(page);
     await page.goto("/work?item=1");
-    await expect(page.locator(".work-objective-full")).toHaveText(
+    await expect(page.locator(".work-description-full")).toHaveText(
         "Polish the welcome page",
     );
     await page.getByRole("button", { name: "Search", exact: true }).click();
@@ -1169,7 +1266,7 @@ test("workspace search finds Work content without changing the open item", async
     await expect(items).toHaveCount(1);
     await search.fill("shorter");
     await expect(items).toHaveCount(3);
-    await expect(page.locator(".work-objective-full")).toHaveText(
+    await expect(page.locator(".work-description-full")).toHaveText(
         "Polish the welcome page",
     );
     await search.press("ArrowUp");
@@ -1185,6 +1282,56 @@ test("workspace search finds Work content without changing the open item", async
     );
 });
 
+test("Work inbox keeps all board lanes with zero or one item", async ({
+    page,
+}) => {
+    await workspace(page);
+    const timestamp = "2026-09-21T00:00:00Z";
+    const item = {
+        version: "1",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        work: {
+            id: "1",
+            title: "Check the release checklist",
+            description: "Verify the checklist.",
+            status: "Ready",
+            attempts: [],
+            history: [],
+            decisions: [],
+            results: [],
+            artifacts: [],
+            messages: [],
+        },
+    };
+    const items: (typeof item)[] = [];
+    await page.route("**/api/work", (route) => route.fulfill({ json: items }));
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/work");
+
+    const inbox = page.getByRole("region", { name: "Work inbox", exact: true });
+    const counts = inbox.locator(".board-lane-count");
+    await expect(inbox.getByRole("heading", { level: 2 })).toHaveText([
+        "Ready",
+        "In progress",
+        "Needs attention",
+        "Closed",
+    ]);
+    await expect(counts).toHaveText(["0", "0", "0", "0"]);
+    await expect(
+        inbox.getByText("Create work to send Goblin a request."),
+    ).toBeVisible();
+
+    items.push(item);
+    await refreshWorkspace(page);
+    await expect(counts).toHaveText(["1", "0", "0", "0"]);
+    await expect(
+        inbox
+            .getByRole("region", { name: "Ready", exact: true })
+            .getByRole("button", { name: item.work.title, exact: true }),
+    ).toBeVisible();
+});
+
 test("Work inbox opens in Board, scopes status to List, and restores inbox state after viewing Work", async ({
     page,
 }) => {
@@ -1193,22 +1340,22 @@ test("Work inbox opens in Board, scopes status to List, and restores inbox state
         summary +
         "\nhttps://example.test/guides/release-checklist-with-an-unbroken-path\nInclude acceptance criteria and follow-up checks for every supported environment.";
     const commands = await workspace(page, true, [
-        { id: "4", title: summary, objective: longTitle, status: "Ready" },
-        { id: "5", objective: "Queue the build", status: "Queued" },
-        { id: "6", objective: "Stop the build", status: "Cancelling" },
+        { id: "4", title: summary, description: longTitle, status: "Ready" },
+        { id: "5", description: "Queue the build", status: "Queued" },
+        { id: "6", description: "Stop the build", status: "Cancelling" },
         {
             id: "7",
-            objective: "Confirm the release window",
+            description: "Confirm the release window",
             status: "NeedsAttention",
             attention: { reason: "InputRequired" },
         },
         {
             id: "8",
-            objective: "Fix the failed export",
+            description: "Fix the failed export",
             status: "NeedsAttention",
             attention: { reason: "Failure" },
         },
-        { id: "9", objective: "Cancel the old release", status: "Cancelled" },
+        { id: "9", description: "Cancel the old release", status: "Cancelled" },
     ]);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/work");
@@ -1311,8 +1458,8 @@ test("Work inbox opens in Board, scopes status to List, and restores inbox state
     await expect(
         page.getByRole("heading", { name: summary, exact: true }),
     ).toBeFocused();
-    await page.getByText("Full objective", { exact: true }).click();
-    await expect(page.locator(".work-objective-full")).toContainText(
+    await page.getByText("Description", { exact: true }).click();
+    await expect(page.locator(".work-description-full")).toContainText(
         "https://example.test/guides/release-checklist-with-an-unbroken-path",
     );
     await page
@@ -1324,7 +1471,12 @@ test("Work inbox opens in Board, scopes status to List, and restores inbox state
     });
 
     await search.fill("release notes");
-    await expect(inbox.locator(".board-lane")).toHaveCount(1);
+    await expect(inbox.locator(".board-lane-count")).toHaveText([
+        "0",
+        "0",
+        "0",
+        "1",
+    ]);
     const closed = lane("Closed").getByRole("button", {
         name: "Write the release notes",
     });
@@ -1397,7 +1549,12 @@ test("Work inbox opens in Board, scopes status to List, and restores inbox state
     await search.fill("no matching work");
     await expect(inbox.getByText("No work matches your search.")).toBeVisible();
     await boardMode.click();
-    await expect(inbox.locator(".board-lane")).toHaveCount(0);
+    await expect(inbox.locator(".board-lane-count")).toHaveText([
+        "0",
+        "0",
+        "0",
+        "0",
+    ]);
     await expect(inbox.getByText("No work matches your search.")).toBeVisible();
     await inbox.getByRole("button", { name: "Clear filter" }).click();
     await expect(search).toHaveValue("");
@@ -1411,7 +1568,7 @@ test("the recovery card distinguishes a historical connection failure from Codex
     const commands = await workspace(page, true, [
         {
             id: "4",
-            objective: "Recover the export",
+            description: "Recover the export",
             status: "NeedsAttention",
             attention: { reason: "Failure", failure: "ConnectionUnavailable" },
         },
@@ -1472,7 +1629,7 @@ test("workspace volume exhaustion explains the limit before retry", async ({
     await workspace(page, true, [
         {
             id: "4",
-            objective: "Update the release guide",
+            description: "Update the release guide",
             status: "NeedsAttention",
             attention: {
                 reason: "Failure",
@@ -1591,7 +1748,7 @@ test("Work inbox refresh updates results while preserving keyboard focus", async
     await page.clock.pauseAt(now);
     const added: WorkFixture = {
         id: "4",
-        objective: "Check the export",
+        description: "Check the export",
         status: "NeedsAttention",
         attention: { reason: "InputRequired" },
     };
@@ -1621,11 +1778,11 @@ test("Work inbox refresh updates results while preserving keyboard focus", async
     await expect(status).toBeFocused();
     await expect(status).toHaveValue("attention");
 
-    const row = list.getByRole("button", { name: added.objective });
+    const row = list.getByRole("button", { name: added.description });
     await row.focus();
-    added.objective = "Confirm the export";
+    added.description = "Confirm the export";
     await page.clock.runFor(3000);
-    const updated = list.getByRole("button", { name: added.objective });
+    const updated = list.getByRole("button", { name: added.description });
     await expect(updated).toBeFocused();
 
     added.status = "Ready";
@@ -1642,14 +1799,14 @@ test("Work inbox refresh updates results while preserving keyboard focus", async
     await search.evaluate((input: HTMLInputElement) =>
         input.setSelectionRange(1, 4),
     );
-    added.objective = "Check the welcome flow";
+    added.description = "Check the welcome flow";
     added.status = "NeedsAttention";
     added.attention = { reason: "InputRequired" };
     await page.clock.runFor(3000);
     await expect(
         page
             .getByRole("listbox", { name: "Search results" })
-            .getByRole("option", { name: added.objective }),
+            .getByRole("option", { name: added.description }),
     ).toBeVisible();
     await expect(search).toBeFocused();
     const selection = await search.evaluate((input: HTMLInputElement) => [
@@ -1668,7 +1825,7 @@ test("a long Work inbox scrolls within the workspace viewport", async ({
     await page.setViewportSize({ width: 1440, height: 720 });
     const items = Array.from({ length: 12 }, (_, index) => ({
         id: String(index + 10),
-        objective: `Review document ${index + 1}`,
+        description: `Review document ${index + 1}`,
         status: "NeedsAttention",
         attention: { reason: "InputRequired" },
     }));
@@ -1676,7 +1833,7 @@ test("a long Work inbox scrolls within the workspace viewport", async ({
     await page.goto("/work");
     const inbox = page.getByRole("region", { name: "Work inbox", exact: true });
     const end = inbox.getByRole("button", {
-        name: items.at(-1)!.objective,
+        name: items.at(-1)!.description,
         exact: true,
     });
 
@@ -1724,7 +1881,7 @@ test("both Work layouts fit a narrow viewport with the sidebar closed", async ({
         }
     };
     await expect(boardMode).toHaveAttribute("aria-pressed", "true");
-    await expect(inbox.locator(".board-lane")).toHaveCount(3);
+    await expect(inbox.locator(".board-lane")).toHaveCount(4);
     await checkWidths();
     await page
         .getByRole("button", { name: "Show sidebar", exact: true })
@@ -1767,7 +1924,7 @@ test("both Work layouts fit a narrow viewport with the sidebar closed", async ({
     });
 
     await boardMode.click();
-    await expect(inbox.locator(".board-lane")).toHaveCount(3);
+    await expect(inbox.locator(".board-lane")).toHaveCount(4);
     const lastLane = inbox.getByRole("region", { name: "Closed", exact: true });
     await lastLane.scrollIntoViewIfNeeded();
     await expect(lastLane).toBeInViewport();
@@ -1858,7 +2015,7 @@ for (const width of [1024, 390, 320]) {
                 .getByRole("listbox", { name: "Search results" })
                 .getByRole("option", { name: "Polish the welcome page" })
                 .click();
-            await expect(page.locator(".work-objective-full")).toHaveText(
+            await expect(page.locator(".work-description-full")).toHaveText(
                 "Polish the welcome page",
             );
             await expect(
@@ -1901,7 +2058,7 @@ test("completed work keeps outputs, sharing, and agent inspection available with
 }) => {
     const commands = await workspace(page);
     const at = "2026-09-21T00:00:00Z";
-    const objective = "Migrate authentication preview to TypeScript";
+    const description = "Migrate authentication preview to TypeScript";
     await page.route("**/api/work", (route) =>
         route.fulfill({
             json: [
@@ -1911,7 +2068,7 @@ test("completed work keeps outputs, sharing, and agent inspection available with
                     updatedAt: at,
                     work: {
                         id: "3",
-                        objective,
+                        description,
                         status: "Completed",
                         agentId: "1",
                         attempts: [
@@ -1964,7 +2121,9 @@ test("completed work keeps outputs, sharing, and agent inspection available with
     );
     await page.setViewportSize({ width: 1743, height: 902 });
     await page.goto("/work?item=3");
-    await expect(page.locator(".work-objective-full")).toHaveText(objective);
+    await expect(page.locator(".work-description-full")).toHaveText(
+        description,
+    );
     await expect(
         page.locator(".progress-row .milestone-icon.complete"),
     ).toHaveCount(3);
@@ -2064,7 +2223,7 @@ test("a result stays prominent among newer artifacts and older executions remain
                     work: {
                         id: "1",
                         title: "Draft a weekend garden checklist",
-                        objective: "Draft a weekend garden checklist",
+                        description: "Draft a weekend garden checklist",
                         status: "Completed",
                         agentId: "1",
                         attempts: ["1", "2", "3", "4"].map((id) => ({
@@ -2244,7 +2403,7 @@ test("uncertain execution stays unresolved, and runtime details never become mil
                     work: {
                         id: "1",
                         title: "Validate the release",
-                        objective: "Validate the release",
+                        description: "Validate the release",
                         status: "NeedsAttention",
                         attention: { reason: "UncertainExecution" },
                         agentId: "1",
