@@ -124,12 +124,14 @@ rotation, and installation confirmation.
 
 ### Use the direct WSL development build
 
-Prepare a [PostgreSQL profile](database.md#wsl-and-windows-pgadmin), then:
+Prepare a [PostgreSQL profile](database.md#wsl-and-windows-pgadmin) and run the direct
+WSL development build from the repository root.
 
 ```bash
 GOBLIN_PUBLIC_ORIGIN=https://dev.goblinboard.com \
 GOBLIN_CHATGPT_ENABLED=true \
-make dev-start DB_PROFILE=wsl
+XDG_CONFIG_HOME="$PWD/.artifacts/db-client" \
+make dev-start DB_PROFILE=wsl-artifacts
 ```
 
 Connect Chisel to **8787**. Keep a separate ChatGPT connection: this process has its own

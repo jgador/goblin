@@ -42,8 +42,8 @@ make dev-start ARGS=--without-database
 
 This starts the application at **http://localhost:8787** with Work disabled. For Work
 development, create a migrated PostgreSQL profile with the
-[database workflow](docs/database.md#wsl-and-windows-pgadmin), then run
-`make dev-start DB_PROFILE=wsl`.
+[database workflow](docs/database.md#wsl-and-windows-pgadmin), then run the
+[direct WSL development command](docs/database.md#daily-development).
 
 `make help` lists tasks; choose checks with the
 [repository guide](docs/repository-layout.md#choosing-verification).

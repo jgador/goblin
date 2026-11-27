@@ -19,10 +19,11 @@ make install
 make build
 ```
 
-Start without a database using `make dev-start ARGS=--without-database`; this disables
-Work. For Work, use a migrated [PostgreSQL profile](database.md#wsl-and-windows-pgadmin)
-and `make dev-start DB_PROFILE=wsl`. Restart after source edits. Full installation and
-container-dependent behavior use the [WSL k3s workflow](../deploy/k3s/README.md).
+Start without a database using `make dev-start ARGS=--without-database` to disable Work.
+For Work, create a migrated [PostgreSQL profile](database.md#wsl-and-windows-pgadmin)
+and use the [direct WSL development command](database.md#daily-development).
+Restart after source edits. Use the [WSL k3s workflow](../deploy/k3s/README.md) for
+full installation and container-dependent behavior.
 
 [Makefile](../Makefile) and [Makefile.dev](../Makefile.dev) own commands and ordering.
 `make help` lists them. Workflows remain serial even with `make -j` because they share
@@ -92,7 +93,7 @@ verification; image deployment cannot apply them.
 | Browser code or UI behavior | `npm --prefix frontend run typecheck`, `make frontend-test`, and the relevant `make browser-test ARGS="tests/e2e/<journey>.spec.ts"` journeys. Inspect the changed interaction and visual result. |
 | Directly run `.mts` scripts | `make scripts-typecheck` and the script's `node --test scripts/<name>.test.mts` (`make ci-test`, `make maintenance-test`, `make release-test`, `make make-test`, `make chisel-check`, `make secrets-test`). |
 | Standalone website | `npm --prefix website run check` (and `npm --prefix website/video run check` for the video), then inspect the affected pages with `make website-start`. |
-| Schema, persistence, dispatch, or database concurrency | Affected .NET tests plus `make database-test DB_PROFILE=wsl` against real PostgreSQL, set up as in [the database guide](database.md#application-configuration-and-verification). |
+| Schema, persistence, dispatch, or database concurrency | Affected .NET tests plus `make database-test` against the development profile selected as in [the database guide](database.md#application-configuration-and-verification). |
 | Codex transport or execution hosting | Existing transport/protocol tests and `make codex-test` where relevant; authenticated execution and isolation need the real-runtime checks in [execution hosting](execution-hosting.md#verification-limits). |
 | Kubernetes manifests, installer, or deployment contracts | `make test` (deployment tests, `make chisel-check`, `make dependencies-check`, `make deploy-generate`); see [deployment assets](formatting.md#deployment-assets). Installer changes also need `make release-build release-check-installer`, `make browser-test ARGS="tests/e2e/setup.spec.ts tests/e2e/install.spec.ts"`, and `make platform-check-image`. Azure installation stays manual. |
 | Environment variables | Follow [adding a variable](environment-variables.md#adding-a-variable). |
