@@ -5,46 +5,64 @@ owns the schema; EF generates the C# mappings.
 
 ## WSL and Windows pgAdmin
 
-After completing the [WSL k3s installer](../deploy/k3s/README.md), run these commands
-**inside WSL, as root** (a root shell, not `sudo`), from the repository root:
+After completing the [WSL k3s installer](../deploy/k3s/README.md), open a **root shell
+inside WSL** and run these commands from the repository root.
 
 ```bash
 cargo build --locked -p goblinctl
-export PATH="$PWD/target/debug:$PATH"
 apt install -y postgresql-client openssl openssh-client
-goblinctl db connect wsl --local --forward-port 55432
-goblinctl db export wsl --client windows --role app
+./target/debug/goblinctl db connect wsl --local --forward-port 55432
+./target/debug/goblinctl db export wsl --client windows --role app
 ```
 
-On Windows, import the generated connection into **pgAdmin**:
+The export prints the full Windows paths for both files. For the `wsl` profile and
+`app` role, look in `%LOCALAPPDATA%\Goblin\postgres\wsl\app\`. Import
+`pgAdmin.json` into **pgAdmin**. Use `connection.json` to configure other clients.
 
 1. Open **Tools → Import/Export Servers → Import** and select the full path
-   printed after **pgAdmin import**, ending in `wsl\app\pgAdmin.json`.
+   printed after **pgAdmin import**.
 2. Keep **Remove all the existing servers?** set to **No** and finish the import.
 3. Open **Goblin → Goblin - wsl (app)**. No database password is needed.
 
-WSL reaches PostgreSQL at `localhost:5432`; Windows uses `localhost:55432` through WSL
-localhost forwarding. Keep WSL running. Choose a forwarding port from 1024 to 65535,
-other than 5432, that is free in both WSL and Windows. The profile saves the port and
-does not change it on its own. The commands check the database identity and TLS login
-before writing any files.
+WSL reaches PostgreSQL at `localhost:5432`. Windows uses `localhost:55432` through WSL
+localhost forwarding. Keep WSL running. Choose a forwarding port from 1024 to 65535
+that is free in both WSL and Windows. The profile saves the forwarding port. Export
+checks the database identity and TLS login before writing the Windows files.
 
 ### Reconnect or refresh
 
-After restarting WSL or renewing certificates, run this in WSL and reconnect the saved
-pgAdmin server:
+After restarting WSL or renewing certificates, run this from the repository root in a
+root WSL shell and reconnect the saved pgAdmin server.
 
 ```bash
-goblinctl db export wsl --client windows --role app
+./target/debug/goblinctl db export wsl --client windows --role app
 ```
 
-`export` refreshes certificates and starts forwarding, so an existing profile does not
-need a separate `connect`. Import only once per profile and role; each import adds
-another server. Certificate paths stay the same. If you change the forwarding port,
-export again and update the saved server's port.
+`export` refreshes certificates at the same paths and starts forwarding. Import once
+per profile and role. If you change the forwarding port, export again and update the
+saved server's port.
+
+### Export after recreating k3s
+
+An export that reports a changed cluster, database volume, or CA stops before writing
+files to Windows. If you expected the original database, restore that installation.
+After intentionally recreating k3s, choose an unused profile name such as `wsl-windows`.
+Run these commands from the repository root in a root WSL shell.
+
+```bash
+./target/debug/goblinctl db connect wsl-windows --local --forward-port 55432
+./target/debug/goblinctl db export wsl-windows --client windows --role app
+```
+
+If port 55432 is in use, choose a free port when connecting. Import the printed
+`wsl-windows\app\pgAdmin.json` path and use the new profile name in future exports.
 
 ### Troubleshooting and other clients
 
+- **Windows export failed.** Rebuild with `cargo build --locked -p goblinctl` and run
+  the export with `./target/debug/goblinctl` from the repository root. Check that WSL
+  can launch Windows PowerShell and that your Windows account can write to the export
+  folder.
 - **Password prompt:** leave it blank, select **Save Password**, and connect.
   Exports include an empty `pgpass.conf` to avoid this prompt.
 - **Windows access violation:** set **Properties → Parameters → GSS encmode →
@@ -54,7 +72,8 @@ export again and update the saved server's port.
 - **Missing root certificate:** use the exported absolute certificate paths and
   keep SSL mode **verify-full**.
 
-For another client, read the export in Windows PowerShell:
+For another client, read the export in Windows PowerShell. Use the name of the profile
+you exported in place of `wsl` if it differs.
 
 ```powershell
 Get-Content "$env:LOCALAPPDATA\Goblin\postgres\wsl\app\connection.json" |
@@ -81,12 +100,12 @@ PostgreSQL and Work APIs.
 
 [Install Azure manually](../deploy/azure/README.md), then configure SSH authentication
 and trust the VM's host key. The SSH user needs passwordless `sudo` for `k3s kubectl`.
-With the CLI and packages from [the WSL setup](#wsl-and-windows-pgadmin), run in WSL
-with your SSH destination:
+With the CLI and packages from [the WSL setup](#wsl-and-windows-pgadmin), run these
+commands from the repository root in WSL with your SSH destination.
 
 ```bash
-goblinctl db connect azure-dev --ssh developer@your-azure-vm --forward-port 55433
-goblinctl db export azure-dev --client windows --role app
+./target/debug/goblinctl db connect azure-dev --ssh developer@your-azure-vm --forward-port 55433
+./target/debug/goblinctl db export azure-dev --client windows --role app
 ```
 
 Import the printed `azure-dev\app\pgAdmin.json` with the

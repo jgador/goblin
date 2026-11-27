@@ -18,7 +18,7 @@ try {
         $acl.SetAccessRuleProtection($true, $false)
         $acl.SetOwner($sid)
         $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
-        Set-Acl -LiteralPath $path -AclObject $acl
+        [IO.Directory]::SetAccessControl($path, $acl)
     }
     function Assert-Identity($identity) {
         foreach ($field in @('cluster', 'volume', 'ca_sha256')) {
@@ -32,7 +32,7 @@ try {
         $acl.SetAccessRuleProtection($true, $false)
         $acl.SetOwner($sid)
         $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', 'Allow')))
-        Set-Acl -LiteralPath $path -AclObject $acl
+        [IO.File]::SetAccessControl($path, $acl)
         [IO.File]::WriteAllText($path, $value, $encoding)
     }
     function Remove-Generation($path) {
