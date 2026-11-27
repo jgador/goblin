@@ -86,7 +86,7 @@ Knowledge indexing and Teams are unavailable. Workspace inspection is currently 
 [API](workspace-lifecycle.md#inspection), without a browser file or terminal view. The
 [browser journeys](../tests/e2e/) exercise navigation, draft preservation, command
 recovery, focus, and accessibility. Durable journeys need the
-[opt-in PostgreSQL test setup](database.md#application-configuration-and-verification);
+[opt-in PostgreSQL test setup](database.md#verify-against-a-local-database);
 report skips separately from fixture results.
 
 ## Product identities

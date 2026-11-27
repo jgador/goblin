@@ -61,7 +61,7 @@ After setup:
 - [Database setup](../../docs/database.md#installation-and-certificates) covers
   PostgreSQL repair and certificates. [Execution hosting](../../docs/execution-hosting.md)
   covers repository execution and GitHub sign-in. For developer database access
-  through an SSH tunnel from WSL, follow [the PostgreSQL Azure workflow](../../docs/database.md#azure-development).
+  through an SSH tunnel from WSL, follow [the PostgreSQL Azure workflow](../../docs/database.md#connect-from-wsl-over-ssh).
 
 ## Verify
 

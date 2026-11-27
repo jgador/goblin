@@ -3,39 +3,33 @@
 Goblin uses PostgreSQL with certificate authentication and database-first EF Core. SQL
 owns the schema; EF generates the C# mappings.
 
-## WSL and Windows pgAdmin
+- [WSL k3s](#wsl-k3s) for the local database installed by `make k3s-start`.
+- [Azure VM](#azure-vm) for the database installed on Azure and reached over SSH.
 
-### Store a client profile in this checkout
+## WSL k3s
+
+### WSL and Windows pgAdmin
 
 After completing the [WSL k3s installer](../deploy/k3s/README.md), open a **root shell
-inside WSL** and run these commands from the repository root. The Linux profile lives
-in the Git-ignored `.artifacts/db-client/goblin/postgres/wsl-artifacts/` directory.
+inside WSL** and run these commands from the repository root. The `--local` flag
+selects the database installed in WSL. The Linux profile lives in the Git-ignored
+`.artifacts/db-client/goblin/postgres/wsl-artifacts/` directory.
 
 ```bash
 cargo build --locked -p goblinctl
-apt install -y postgresql-client openssl openssh-client iproute2
+apt install -y postgresql-client openssl iproute2
 XDG_CONFIG_HOME="$PWD/.artifacts/db-client" \
   ./target/debug/goblinctl db connect wsl-artifacts --local --port-forward 55432
 XDG_CONFIG_HOME="$PWD/.artifacts/db-client" \
   ./target/debug/goblinctl db export wsl-artifacts --client windows --role app
 ```
 
-The export prints the full Windows paths for both files. For the `wsl-artifacts` profile
-and `app` role, look in `%LOCALAPPDATA%\Goblin\postgres\wsl-artifacts\app\`. Import
-`pgAdmin.json` into **pgAdmin**. Use `connection.json` to configure other clients.
+WSL reaches PostgreSQL at `localhost:5432`. Windows pgAdmin uses `localhost:55432`
+through WSL localhost forwarding. Follow the [pgAdmin import steps](#windows-pgadmin)
+with the printed `pgAdmin.json` path under
+`%LOCALAPPDATA%\Goblin\postgres\wsl-artifacts\app\`.
 
-1. Open **Tools → Import/Export Servers → Import** and select the full path
-   printed after **pgAdmin import**.
-2. Keep **Remove all the existing servers?** set to **No** and finish the import.
-3. Open **Goblin → Goblin - wsl-artifacts (app)**. No database password is needed.
-
-WSL reaches PostgreSQL at `localhost:5432`. Windows uses `localhost:55432` through WSL
-localhost forwarding. Keep WSL running. The profile saves the forwarding port, which
-can be any port from 1024 to 65535 except the reserved database port 5432.
-Connect checks for WSL port conflicts, and export checks for Windows port conflicts.
-Export also verifies the database identity and TLS login before writing the Windows files.
-
-### Reconnect or refresh
+#### Reconnect or refresh
 
 After restarting WSL or renewing certificates, run this from the repository root in a
 root WSL shell and reconnect the saved pgAdmin server. Use the same config directory and
@@ -46,17 +40,15 @@ XDG_CONFIG_HOME="$PWD/.artifacts/db-client" \
   ./target/debug/goblinctl db export wsl-artifacts --client windows --role app
 ```
 
-`export` refreshes certificates at the same paths and starts forwarding. Import once
-per profile and role. If you change the forwarding port, export again and update the
-saved server's port.
+`export` refreshes certificates at the same paths and starts forwarding.
 
-### Export after recreating k3s
+#### Export after recreating k3s
 
 An export that reports a changed cluster, database volume, or CA stops before writing
 files to Windows. If you expected the original database, restore that installation.
-After intentionally recreating k3s, choose a profile name that is unused in WSL and
-Windows, such as `wsl-artifacts-new`. Run these commands from the repository root in
-a root WSL shell.
+After [intentionally recreating k3s](../deploy/k3s/README.md#stop-resume-or-start-clean),
+choose a profile name that is unused in WSL and Windows, such as `wsl-artifacts-new`.
+Run these commands from the repository root in a root WSL shell.
 
 ```bash
 XDG_CONFIG_HOME="$PWD/.artifacts/db-client" \
@@ -68,50 +60,26 @@ XDG_CONFIG_HOME="$PWD/.artifacts/db-client" \
 Import the printed `wsl-artifacts-new\app\pgAdmin.json` path and use the new profile name
 in future exports.
 
-### Troubleshooting and other clients
+#### WSL forwarding port in use
 
-- **WSL port is in use.** Connect reports the listener when it can identify it. To
-  stop that listener and take over its port, rerun your connect command with `--force`.
-  Keep the same config directory, profile name, and explicit port.
+Connect reports the listener when it can identify it. To stop that listener and take
+over its port, rerun your connect command with `--force`. Keep the same config
+directory, profile name, and explicit port.
 
-  ```bash
-  XDG_CONFIG_HOME="$PWD/.artifacts/db-client" \
-    ./target/debug/goblinctl db connect wsl-artifacts --local --port-forward 55432 --force
-  ```
-
-- **Windows port is in use.** Free it in Windows or connect with a different
-  `--port-forward` value, export again, and update the port in pgAdmin.
-- **Windows export failed.** Rebuild with `cargo build --locked -p goblinctl` and run
-  the [export command](#reconnect-or-refresh) from the repository root. Check that WSL
-  can launch Windows PowerShell and that your Windows account can write to the export
-  folder.
-- **Password prompt:** leave it blank, select **Save Password**, and connect.
-  Exports include an empty `pgpass.conf` to avoid this prompt.
-- **Windows access violation:** set **Properties → Parameters → GSS encmode →
-  disable** (add it with **+** if absent). This works around a
-  [pgAdmin Windows bug](https://github.com/pgadmin-org/pgadmin4/issues/10445).
-  New exports include this setting; edit existing saved servers.
-- **Missing root certificate:** use the exported absolute certificate paths and
-  keep SSL mode **verify-full**.
-
-For another client, read the export in Windows PowerShell. Use the name of the profile
-you exported in place of `wsl-artifacts` if it differs.
-
-```powershell
-Get-Content "$env:LOCALAPPDATA\Goblin\postgres\wsl-artifacts\app\connection.json" |
-    ConvertFrom-Json |
-    Format-List host, port, database, username, sslmode, gssencmode, sslrootcert, sslcert, sslkey
+```bash
+XDG_CONFIG_HOME="$PWD/.artifacts/db-client" \
+  ./target/debug/goblinctl db connect wsl-artifacts --local --port-forward 55432 --force
 ```
 
-Copy those values into the client's connection and SSL fields; clients do not read
-`connection.json` themselves. `sslrootcert` is the CA, `sslcert` the client certificate,
-and `sslkey` its private key. Leave the password blank.
+For a problem with the installation's `localhost:5432` endpoint, see
+[WSL k3s diagnostics](../deploy/k3s/README.md#progress-and-logs).
 
-## Daily development
+### Daily development
 
 Use `make dev-start`, `make database-migrate`, `make database-scaffold`, or
 `make database-test`. [Makefile.dev](../Makefile.dev) refreshes the profile and selects
-the least-privileged role needed. Use the same `XDG_CONFIG_HOME` as during setup and set
+the least-privileged role needed. Direct development receives the app connection through
+`ConnectionStrings__Goblin`. Use the same `XDG_CONFIG_HOME` as during setup and set
 `DB_PROFILE` to the profile name. The Make targets default to the name `wsl` when
 `DB_PROFILE` is unset.
 
@@ -129,29 +97,145 @@ XDG_CONFIG_HOME="$PWD/.artifacts/db-client" \
 
 `make dev-start ARGS=--without-database` disables PostgreSQL and Work APIs.
 
-## Azure development
+### Verify against a local database
 
-[Install Azure manually](../deploy/azure/README.md), then configure SSH authentication
-and trust the VM's host key. The SSH user needs passwordless `sudo` for `k3s kubectl`.
-With the CLI and packages from [the WSL setup](#wsl-and-windows-pgadmin), run these
-commands from the repository root in WSL with your SSH destination.
+Run the database tests from the repository root in WSL with your local profile.
 
 ```bash
+XDG_CONFIG_HOME="$PWD/.artifacts/db-client" make database-test DB_PROFILE=wsl-artifacts
+```
+
+The tests create and drop uniquely named databases. Without the test connections,
+database tests skip and ordinary tests need no server. `GOBLIN_TEST_POSTGRES_APP` opts
+in to durable Work HTTP and browser journeys. PostgreSQL schema integration suites also
+need `GOBLIN_TEST_POSTGRES_ADMIN`.
+[The environment catalog](../config/environment.mts) defines both connections. The
+profile runner uses `--role app` by default. `--usage tests` exposes test connections
+for the selected roles. Add `--role both` for schema suites. `make database-test`
+selects both roles. Report database-dependent skips separately from passing fixture
+tests.
+
+Use these commands to run HTTP and browser journeys against a migrated, disposable
+WSL database.
+
+```bash
+XDG_CONFIG_HOME="$PWD/.artifacts/db-client" \
+  ./target/debug/goblinctl db run wsl-artifacts --usage tests -- make node-test
+XDG_CONFIG_HOME="$PWD/.artifacts/db-client" \
+  ./target/debug/goblinctl db run wsl-artifacts --usage tests -- make browser-test ARGS=tests/e2e/work.spec.ts
+```
+
+These journeys write Work records to the selected database.
+
+#### Manual regression after development recreation
+
+After recreating the development database, applying the baseline, and deploying the
+changed build, check readiness and repeat these journeys with neutral test data. Keep
+Work PVCs.
+
+- **Work.** Create an item, rename its title, and reload the page. In PostgreSQL,
+  check the updated `work_item.title` and original `work_item.description`.
+- **Slack.** Connect or relink the installation, link an external identity, submit
+  a message in a linked thread, and confirm Work and replies appear once. Reply
+  in that thread and confirm it reaches the existing conversation.
+- **GitHub.** Connect the account, select an accessible test repository, complete
+  repository setup and approval, and confirm a Work repository operation completes
+  with its recorded result.
+- **ChatGPT.** Connect the ChatGPT/Codex account, select a model, submit Work,
+  answer an attention request, and confirm completion and history. Restart
+  Goblin during queued Work and confirm recovery. Reconcile uncertain execution
+  before retrying failed Work.
+
+## Azure VM
+
+The [manual Azure installer](../deploy/azure/README.md) provisions PostgreSQL on the
+VM and exposes it there on `localhost:5432`. Goblin runs in k3s and connects to the
+PostgreSQL Service with a client certificate mounted from a Kubernetes Secret.
+For database repair, run the [installation commands](#installation-and-certificates)
+on the Azure VM.
+
+### Connect from WSL over SSH
+
+For Windows pgAdmin access to the VM, [configure SSH authentication and verify the
+VM's host key](../deploy/azure/reference.md#use-the-saved-key-or-add-ssh-access-later).
+The SSH user needs passwordless `sudo` for `k3s kubectl`. Install `postgresql-client`,
+`openssl`, `openssh-client`, and `iproute2` in WSL. From the repository root, run the
+following as the WSL user who can SSH to the VM without a prompt. Substitute your SSH
+destination.
+
+```bash
+cargo build --locked -p goblinctl
 ./target/debug/goblinctl db connect azure-dev --ssh developer@your-azure-vm --port-forward 55433
 ./target/debug/goblinctl db export azure-dev --client windows --role app
 ```
 
-Import the printed `azure-dev\app\pgAdmin.json` with the
-[same pgAdmin steps](#wsl-and-windows-pgadmin). The SSH tunnel runs in WSL on
-`localhost:55433` and reaches the VM's `localhost:5432`. Keep WSL running. For later
-exports, repeat the export command above.
+The `azure-dev` profile lives on the WSL client under `~/.config/goblin/postgres/azure-dev/`
+by default. If you set `XDG_CONFIG_HOME`, use the same value for connect and export.
+Windows pgAdmin uses `localhost:55433` through the SSH tunnel in WSL to reach the VM's
+`localhost:5432`. Follow the [pgAdmin import steps](#windows-pgadmin) with the printed
+`pgAdmin.json` path under `%LOCALAPPDATA%\Goblin\postgres\azure-dev\app\`.
+
+#### Reconnect or refresh the Azure tunnel
+
+After restarting WSL or renewing certificates, run this from the repository root as
+the same WSL user, with the same `XDG_CONFIG_HOME` setting and profile name.
+
+```bash
+./target/debug/goblinctl db export azure-dev --client windows --role app
+```
+
+This reopens the SSH tunnel and refreshes the Windows files. Reconnect the saved
+pgAdmin server.
+
+## Windows pgAdmin
+
+Keep WSL running while connected. The export prints absolute paths to `pgAdmin.json`
+and `connection.json` after verifying the database identity and TLS login.
+
+1. Open **Tools → Import/Export Servers → Import** and select the full path printed
+   after **pgAdmin import**.
+2. Keep **Remove all the existing servers?** set to **No** and finish the import.
+3. Under **Goblin**, open the entry named for the exported profile and role, such as
+   **Goblin - wsl-artifacts (app)** or **Goblin - azure-dev (app)**.
+
+Import once per profile and role. If you change the forwarding port, export again and
+update the saved server's port.
+
+- **Windows port is in use.** Free it in Windows or connect with a different
+  `--port-forward` value, export again, and update the port in pgAdmin.
+- **Windows export failed.** Rebuild with `cargo build --locked -p goblinctl` and run the
+  export command for [WSL k3s](#reconnect-or-refresh) or
+  [Azure](#reconnect-or-refresh-the-azure-tunnel). Check that WSL can launch Windows
+  PowerShell and that your Windows account can write to the export folder.
+- **Password prompt.** Leave it blank, select **Save Password**, and connect.
+  Exports include an empty `pgpass.conf` to avoid this prompt.
+- **Windows access violation.** Set **Properties → Parameters → GSS encmode →
+  disable** (add it with **+** if absent). This works around a
+  [pgAdmin Windows bug](https://github.com/pgadmin-org/pgadmin4/issues/10445).
+  New exports include this setting. Edit existing saved servers.
+- **Missing root certificate.** Use the exported absolute certificate paths and
+  keep SSL mode **verify-full**.
+
+For another client, open Windows PowerShell and substitute the full `connection.json`
+path printed by your export.
+
+```powershell
+Get-Content -LiteralPath '<printed connection.json path>' |
+    ConvertFrom-Json |
+    Format-List host, port, database, username, sslmode, gssencmode, sslrootcert, sslcert, sslkey
+```
+
+Copy those values into the client's connection and SSL fields. `sslrootcert` is the
+CA, `sslcert` the client certificate, and `sslkey` its private key. Leave the password
+blank.
 
 ## Profile management and storage
 
-Use `goblinctl db --help` for commands. Connect/refresh preserve the saved port; change
-it with `connect --port-forward PORT`. Disconnect stops only this profile's forwarder,
-preserving settings and credentials. It does not stop the installation's loopback
-endpoint. Linux refresh does not update Windows exports.
+Use `goblinctl db --help` for commands. Connect and refresh preserve the saved port.
+To change it, use `connect --port-forward PORT`. Choose a port from 1024 to 65535 other
+than the reserved database port 5432. Connect checks for WSL port conflicts, and export
+checks for Windows port conflicts. Disconnect stops the profile's forwarder and
+preserves its settings and credentials.
 
 Source certificates come from Kubernetes Secrets, where the CA signing key stays.
 Linux profiles live under `$XDG_CONFIG_HOME/goblin/postgres/<profile>/` with private
@@ -162,12 +246,9 @@ Export only the role needed. Profiles pass connection settings to children, not
 appsettings files.
 
 A profile refuses a changed source, cluster, database volume, or CA identity. Restore
-the original installation or use a new profile name. After deliberately
-[recreating development](../deploy/k3s/README.md#stop-resume-or-start-clean), disconnect
-and remove that installation's old Linux profile and Windows export before reusing the
-name.
-
-Before moving or removing a profile directory, run `db disconnect` with the original
+the original installation or use a new profile name. To reuse the name after a
+deliberate recreation, remove the old Linux profile and Windows export. Before moving
+or removing a profile directory, run `db disconnect` with the original
 `XDG_CONFIG_HOME` and profile name.
 
 ## Installation and certificates
@@ -204,13 +285,26 @@ to replace a missing CA while issued TLS Secrets exist, or a missing initializat
 Secret while the PVC exists; restore the missing Secrets. Deleting the namespace or PVC,
 or losing the VM, can delete the database.
 
+### Deployed application configuration
+
+[appsettings.json](../backend/src/Goblin.Web/appsettings.json) owns the deployed
+connection and certificate paths. Kubernetes mounts only the application identity,
+read-only. Database passwords and TLS keys stay out of the image. Administrator and CA
+credentials never reach [repository sandboxes](execution-hosting.md). Rebuild and
+redeploy when packaged connection settings change.
+
+Durable Work needs the migrated schema, including Wolverine tables. The installer runs
+`goblinctl db migrate IMAGE` with only the admin certificate and stops on failure before
+deploying Goblin. When Work is enabled, `/readyz` checks the database.
+
 ### Certificate renewal
 
 cert-manager renews leaf certificates and rotates their keys according to the
 [certificate manifests](../deploy/postgres/). PostgreSQL reloads its TLS files, and new
 Npgsql connections read the current client files. No rebuild or connection-string change
-is needed. Linux profiles refresh on connect and on development commands; Windows needs
-an explicit [export](#reconnect-or-refresh).
+is needed. Linux profiles refresh on connect and on development commands. On Windows,
+refresh the export for [WSL k3s](#reconnect-or-refresh) or
+[Azure](#reconnect-or-refresh-the-azure-tunnel).
 
 Monitor readiness and expiry. The CA keeps its key during leaf renewal. Its issuer does
 not provide trust rollover or revocation, so plan overlapping trust before you replace
@@ -283,7 +377,7 @@ To change the schema:
    Apply SQL to a fresh disposable database with `make database-migrate`, then run
    `make database-scaffold`. Select the profile as in [daily development](#daily-development).
 3. Remove generated entities for dropped or renamed tables, then run
-   `dotnet build backend/Goblin.slnx` and the [database tests](#application-configuration-and-verification).
+   `dotnet build backend/Goblin.slnx` and the [database tests](#verify-against-a-local-database).
 4. Review SQL, table list, and generated C# together. A second scaffold against
    the same database must produce no further diff.
 
@@ -293,57 +387,3 @@ PostgreSQL stores Work conversations, lifecycle history, Git commit metadata, an
 inspection records. Workspace files stay on the Work PVC; `workspace_checkpoint` holds
 no file content or archive. Never store workspace archives in PostgreSQL. See
 [workspace lifecycle](workspace-lifecycle.md).
-
-## Application configuration and verification
-
-[appsettings.json](../backend/src/Goblin.Web/appsettings.json) owns the deployed
-connection and certificate paths. Kubernetes mounts only the application identity,
-read-only. Database passwords and TLS keys stay out of the image. Administrator and CA
-credentials never reach [repository sandboxes](execution-hosting.md). Rebuild and
-redeploy when packaged connection settings change.
-
-Direct development receives the app connection through `ConnectionStrings__Goblin`.
-Durable Work needs the migrated schema, including Wolverine tables. The installer runs
-`goblinctl db migrate IMAGE` with only the admin certificate and stops on failure before
-deploying Goblin. When Work is enabled, `/readyz` checks the database.
-
-Run `make database-test` against a development profile. Select the profile as in
-[daily development](#daily-development). The tests create and drop
-uniquely named databases. Without the test connections, database tests skip and ordinary
-tests need no server. `GOBLIN_TEST_POSTGRES_APP` opts in to durable Work HTTP and browser
-journeys; PostgreSQL schema integration suites also need `GOBLIN_TEST_POSTGRES_ADMIN`.
-[The environment catalog](../config/environment.mts) defines both connections. The
-profile runner uses `--role app` by default; `--usage tests` exposes test connections
-for the selected roles. Add `--role both` for schema suites; `make database-test`
-selects both roles. Report database-dependent skips separately from passing fixture
-tests.
-
-To run HTTP and browser journeys against a migrated, disposable development database:
-
-```bash
-XDG_CONFIG_HOME="$PWD/.artifacts/db-client" \
-  ./target/debug/goblinctl db run wsl-artifacts --usage tests -- make node-test
-XDG_CONFIG_HOME="$PWD/.artifacts/db-client" \
-  ./target/debug/goblinctl db run wsl-artifacts --usage tests -- make browser-test ARGS=tests/e2e/work.spec.ts
-```
-
-These journeys write Work records to the selected database.
-
-### Manual regression after development recreation
-
-After recreating the development database, applying the baseline, and deploying the
-changed build, check readiness and repeat these journeys with neutral test data. Keep
-Work PVCs.
-
-- **Work:** create an item, rename its title, and reload the page. In PostgreSQL,
-  check the updated `work_item.title` and original `work_item.description`.
-- **Slack:** connect or relink the installation, link an external identity, submit
-  a message in a linked thread, and confirm Work and replies appear once. Reply
-  in that thread and confirm it reaches the existing conversation.
-- **GitHub:** connect the account, select an accessible test repository, complete
-  repository setup and approval, and confirm a Work repository operation completes
-  with its recorded result.
-- **ChatGPT:** connect the ChatGPT/Codex account, select a model, submit Work,
-  answer an attention request, and confirm completion and history. Restart
-  Goblin during queued Work and confirm recovery; reconcile uncertain execution
-  before retrying failed Work.
